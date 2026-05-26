@@ -3,10 +3,21 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { boxes } from "@/lib/data";
+import { boxes, type Box } from "@/lib/data";
+import { SiteNav } from "@/app/components/site-nav";
 
 export default function CollectionPage() {
   const [collected, setCollected] = useState<Set<number>>(new Set());
+  const [allBoxes, setAllBoxes] = useState<Box[]>(boxes);
+
+  useEffect(() => {
+    fetch("/api/boxes")
+      .then((r) => r.json())
+      .then((extra: Box[]) => {
+        if (extra.length > 0) setAllBoxes([...boxes, ...extra]);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -15,81 +26,157 @@ export default function CollectionPage() {
     } catch {}
   }, []);
 
-  const collectedBoxes = boxes.filter((b) => collected.has(b.id));
+  const collectedBoxes = allBoxes.filter((b) => collected.has(b.id));
 
   return (
-    <div className="flex flex-col h-full uppercase tracking-widest text-[11px] font-medium" style={{ color: "var(--ink)" }}>
-      {/* NAV */}
-      <nav
-        className="flex items-center justify-between px-6 py-3 border-b shrink-0"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <div className="flex gap-6">
-          <Link href="/gallery" className="opacity-40 hover:opacity-100 transition-opacity">
-            GALLERY
-          </Link>
-          <Link href="/about" className="opacity-40 hover:opacity-100 transition-opacity">
-            ABOUT
-          </Link>
-          <Link href="/collection" className="opacity-100 hover:opacity-60 transition-opacity">
-            MY COLLECTION ({collected.size})
-          </Link>
-        </div>
-        <span className="absolute left-1/2 -translate-x-1/2 text-[13px] font-semibold tracking-widest">
-          OUTSIDETHEBOX
-        </span>
-        <div />
-      </nav>
+    <div
+      style={{
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        fontFamily: '"Geist", system-ui, sans-serif',
+        backgroundColor: "#FFFFFF",
+        color: "#202020",
+      }}
+    >
+      <SiteNav collectedCount={collected.size} />
 
-      {/* CONTENT */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div style={{ flex: 1, overflowY: "auto" }}>
         {collectedBoxes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full gap-4" style={{ color: "var(--muted)" }}>
-            <span className="text-2xl font-bold">0</span>
-            <p>YOUR COLLECTION IS EMPTY</p>
+          <div
+            style={{
+              height: "100%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                fontSize: 36,
+                letterSpacing: "-0.06em",
+                fontWeight: 500,
+                color: "#E8E8E8",
+              }}
+            >
+              0
+            </div>
+            <p
+              style={{
+                fontSize: 10,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "#AAAAAA",
+                margin: 0,
+              }}
+            >
+              Your collection is empty
+            </p>
             <Link
               href="/gallery"
-              className="px-4 py-2 border transition-colors hover:border-transparent"
-              style={{ borderColor: "var(--border)", color: "var(--muted)" }}
+              style={{
+                marginTop: 8,
+                fontSize: 10,
+                letterSpacing: "-0.02em",
+                fontWeight: 500,
+                textTransform: "uppercase",
+                color: "#202020",
+                textDecoration: "none",
+                borderBottom: "1px solid #E8E8E8",
+                paddingBottom: 2,
+              }}
             >
-              GO EXPLORE →
+              Browse the gallery →
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-0">
+          <div style={{ padding: "36px 20px" }}>
             {/* Header */}
-            <div className="flex items-baseline gap-3 mb-8">
-              <span className="text-3xl font-bold">{collectedBoxes.length}</span>
-              <span style={{ color: "var(--muted)" }}>
-                {collectedBoxes.length === 1 ? "BOX COLLECTED" : "BOXES COLLECTED"}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                gap: 10,
+                marginBottom: 40,
+                borderBottom: "1px solid #E8E8E8",
+                paddingBottom: 20,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 30,
+                  letterSpacing: "-0.06em",
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                {collectedBoxes.length}
+              </span>
+              <span
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.08em",
+                  fontWeight: 500,
+                  textTransform: "uppercase",
+                  color: "#AAAAAA",
+                }}
+              >
+                {collectedBoxes.length === 1 ? "Box collected" : "Boxes collected"}
               </span>
             </div>
 
-            {/* Sticker grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {/* Grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                gap: 24,
+              }}
+            >
               {collectedBoxes.map((box) => (
-                <div key={box.id} className="flex flex-col gap-2 items-center">
-                  {/* Sticker — for now just the image with a die-cut shadow effect */}
+                <div key={box.id} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div
-                    className="relative overflow-hidden"
                     style={{
-                      width: 120,
-                      height: 120,
-                      borderRadius: "50% 45% 55% 48% / 48% 52% 50% 52%",
-                      boxShadow: "2px 3px 0 2px var(--border)",
+                      position: "relative",
+                      width: "100%",
+                      aspectRatio: "1",
+                      overflow: "hidden",
                     }}
                   >
                     <Image
-                      src={`https://picsum.photos/seed/box${box.id}/240/240`}
+                      src={(box.images && box.images[0]) ?? `https://picsum.photos/seed/box${box.id}/320/320`}
+                      unoptimized={!!(box.images && box.images[0])}
                       alt={box.title}
                       fill
-                      className="object-cover"
+                      style={{ objectFit: "cover" }}
                     />
                   </div>
-                  <span className="text-[10px] font-semibold tracking-widest">{box.title}</span>
-                  <span className="text-[9px]" style={{ color: "var(--muted)" }}>
-                    {box.neighbourhood}
-                  </span>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        letterSpacing: "-0.03em",
+                        fontWeight: 600,
+                        textTransform: "uppercase",
+                        color: "#202020",
+                        marginBottom: 2,
+                      }}
+                    >
+                      {box.title}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 9,
+                        letterSpacing: "-0.01em",
+                        color: "#AAAAAA",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {box.neighbourhood}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

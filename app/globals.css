@@ -18,3 +18,32 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Column density slider */
+input[type="range"].col-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 72px;
+  height: 1px;
+  background: #D3D3D3;
+  outline: none;
+  cursor: pointer;
+  border-radius: 0;
+}
+input[type="range"].col-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #202020;
+  cursor: pointer;
+}
+input[type="range"].col-slider::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #202020;
+  border: none;
+  cursor: pointer;
+}

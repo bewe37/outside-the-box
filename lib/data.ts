@@ -6,6 +6,7 @@ export interface Box {
   artist: string;
   year: number;
   captured: string;
+  images?: string[]; // uploaded image paths (any orientation), overrides picsum placeholder
 }
 
 export type Neighbourhood =

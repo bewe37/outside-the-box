@@ -1,18 +1,26 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { boxes, NEIGHBOURHOODS, type Box, type Neighbourhood } from "@/lib/data";
+import { SiteNav } from "@/app/components/site-nav";
+import gsap from "gsap";
 
 const GridView = dynamic(() => import("./GridView3D"), { ssr: false });
+const StreetView = dynamic(() => import("./StreetView3D"), { ssr: false });
 
-type ViewMode = "INDEX" | "GRID";
+type ViewMode = "INDEX" | "GRID" | "PHOTOS";
 
-function imgUrl(id: number, w: number, h: number) {
-  return `https://picsum.photos/seed/box${id}/${w}/${h}`;
+function imgUrl(box: Box, w: number, h: number): string {
+  if (box.images && box.images.length > 0) return box.images[0];
+  return `https://picsum.photos/seed/box${box.id}/${w}/${h}`;
+}
+
+function isUploaded(box: Box): boolean {
+  return !!(box.images && box.images.length > 0);
 }
 
 // ─── Nav ──────────────────────────────────────────────────────────────────────
@@ -21,109 +29,56 @@ function Nav({
   view,
   onViewChange,
   collectedCount,
+  photoColumns,
+  onColumnsChange,
 }: {
   view: ViewMode;
   onViewChange: (v: ViewMode) => void;
   collectedCount: number;
+  photoColumns: number;
+  onColumnsChange: (n: number) => void;
 }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        paddingBlock: 18,
-        paddingInline: 16,
-        position: "relative",
-        flexShrink: 0,
-        borderBottom: view === "GRID" ? "1px solid #D3D3D3" : "none",
-      }}
-    >
-      {/* Left — wordmark */}
-      <span
-        style={{
-          fontSize: 14,
-          letterSpacing: "-0.06em",
-          fontWeight: 500,
-          textTransform: "uppercase",
-          whiteSpace: "pre",
-          color: "#202020",
-          lineHeight: "18px",
-        }}
-      >
-        OutsideTheBox
-      </span>
-
-      {/* Center — nav links */}
-      <div
-        style={{
-          display: "flex",
-          gap: 20,
-          position: "absolute",
-          left: "50%",
-          top: 18,
-          translate: "-50%",
-        }}
-      >
-        <NavLink href="/gallery" active>GALLERY</NavLink>
-        <NavLink href="/about">ABOUT</NavLink>
-        <NavLink href="/collection">MY COLLECTION ({collectedCount})</NavLink>
-      </div>
-
-      {/* Right — view toggle */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+  const viewControls = (
+    <>
+      {(["GRID", "INDEX", "PHOTOS"] as ViewMode[]).map((v) => (
         <button
-          onClick={() => onViewChange("GRID")}
+          key={v}
+          onClick={() => onViewChange(v)}
           style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
         >
-          {view === "GRID" && (
+          {view === v && (
             <span style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: "#202020", flexShrink: 0, display: "inline-block" }} />
           )}
-          <span style={{ fontSize: 14, letterSpacing: "-0.06em", fontWeight: 500, textTransform: "uppercase", color: view === "GRID" ? "#202020" : "#A8A8A8", lineHeight: "18px" }}>
-            GRID
+          <span style={{ fontSize: 11, letterSpacing: "-0.04em", fontWeight: 500, textTransform: "uppercase", color: view === v ? "#202020" : "#A8A8A8", lineHeight: "14px" }}>
+            {v}
           </span>
         </button>
+      ))}
 
-        <button
-          onClick={() => onViewChange("INDEX")}
-          style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
-        >
-          {view === "INDEX" && (
-            <span style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: "#202020", flexShrink: 0, display: "inline-block" }} />
-          )}
-          <span style={{ fontSize: 14, letterSpacing: "-0.06em", fontWeight: 500, textTransform: "uppercase", color: view === "INDEX" ? "#202020" : "#A8A8A8", lineHeight: "18px" }}>
-            INDEX
+      {view === "PHOTOS" && (
+        <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8", marginLeft: 2 }}>
+          <input
+            type="range"
+            className="col-slider"
+            min={2}
+            max={6}
+            value={photoColumns}
+            onChange={(e) => onColumnsChange(Number(e.target.value))}
+          />
+          <span style={{ fontSize: 11, letterSpacing: "-0.04em", fontWeight: 500, color: "#202020", lineHeight: "14px", minWidth: 10, fontFamily: "inherit" }}>
+            {photoColumns}
           </span>
-        </button>
-      </div>
-    </div>
+        </div>
+      )}
+    </>
   );
-}
 
-function NavLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active?: boolean;
-  children: React.ReactNode;
-}) {
   return (
-    <Link
-      href={href}
-      style={{
-        fontSize: 14,
-        letterSpacing: "-0.06em",
-        fontWeight: 500,
-        textTransform: "uppercase",
-        color: active ? "#202020" : "#A8A8A8",
-        textDecoration: "none",
-        lineHeight: "18px",
-      }}
-    >
-      {children}
-    </Link>
+    <SiteNav
+      collectedCount={collectedCount}
+      right={viewControls}
+      borderBottom={view === "GRID"}
+    />
   );
 }
 
@@ -160,12 +115,12 @@ function FilterBar({
       >
         <span
           style={{
-            fontSize: 13,
-            letterSpacing: "-0.06em",
+            fontSize: 11,
+            letterSpacing: "-0.04em",
             fontWeight: 500,
             textTransform: "uppercase",
             color: "#202020",
-            lineHeight: "16px",
+            lineHeight: "14px",
           }}
         >
           Neighbourhood
@@ -181,13 +136,13 @@ function FilterBar({
               key={n}
               onClick={() => onChange(n)}
               style={{
-                fontSize: 13,
-                letterSpacing: "-0.06em",
+                fontSize: 11,
+                letterSpacing: "-0.04em",
                 fontWeight: 500,
                 textTransform: "uppercase",
-                lineHeight: "16px",
-                paddingBlock: 6,
-                paddingInline: 12,
+                lineHeight: "14px",
+                paddingBlock: 5,
+                paddingInline: 10,
                 borderRadius: 2,
                 border: "none",
                 cursor: "pointer",
@@ -208,12 +163,23 @@ function FilterBar({
 // ─── Index page ───────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
-  const [view, setView] = useState<ViewMode>("INDEX");
+  const [view, setView] = useState<ViewMode>("PHOTOS");
   const [filter, setFilter] = useState<Neighbourhood | "ALL">("ALL");
   const [selected, setSelected] = useState<Box | null>(null);
   const [hovered, setHovered] = useState<Box | null>(null);
   const [collected, setCollected] = useState<Set<number>>(new Set());
   const [gridSelected, setGridSelected] = useState<Box | null>(null);
+  const [photoColumns, setPhotoColumns] = useState(3);
+  const [allBoxes, setAllBoxes] = useState<Box[]>(boxes);
+
+  useEffect(() => {
+    fetch("/api/boxes")
+      .then((r) => r.json())
+      .then((extra: Box[]) => {
+        if (extra.length > 0) setAllBoxes([...boxes, ...extra]);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     try {
@@ -238,7 +204,7 @@ export default function GalleryPage() {
     });
   }
 
-  const filtered = filter === "ALL" ? boxes : boxes.filter((b) => b.neighbourhood === filter);
+  const filtered = filter === "ALL" ? allBoxes : allBoxes.filter((b) => b.neighbourhood === filter);
 
   return (
     <div
@@ -252,9 +218,9 @@ export default function GalleryPage() {
         overflow: "hidden",
       }}
     >
-      <Nav view={view} onViewChange={setView} collectedCount={collected.size} />
+      <Nav view={view} onViewChange={setView} collectedCount={collected.size} photoColumns={photoColumns} onColumnsChange={setPhotoColumns} />
       <AnimatePresence>
-        {view === "INDEX" && (
+        {(view === "INDEX" || view === "PHOTOS") && (
           <motion.div
             key="filterbar"
             variants={{
@@ -292,7 +258,7 @@ export default function GalleryPage() {
                 onCollect={toggleCollect}
               />
             </motion.div>
-          ) : (
+          ) : view === "GRID" ? (
             <motion.div
               key="grid"
               initial={{ opacity: 0 }}
@@ -306,6 +272,23 @@ export default function GalleryPage() {
                 collected={collected}
                 onCollect={toggleCollect}
                 onGridSelect={setGridSelected}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="photos"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              style={{ display: "flex", flex: 1, overflow: "hidden" }}
+            >
+              <StreetView
+                boxes={filtered}
+                collected={collected}
+                onCollect={toggleCollect}
+                onSelect={setGridSelected}
+                columns={photoColumns}
               />
             </motion.div>
           )}
@@ -474,7 +457,7 @@ function IndexView({
               }}
             >
               <Image
-                src={imgUrl(hovered.id, 264, 400)}
+                src={imgUrl(hovered, 264, 400)}
                 alt={hovered.title}
                 fill
                 style={{ objectFit: "cover" }}
@@ -532,12 +515,12 @@ function IndexRow({
           style={{
             width: 44,
             flexShrink: 0,
-            fontSize: 14,
-            letterSpacing: "-0.06em",
+            fontSize: 11,
+            letterSpacing: "-0.04em",
             fontWeight: 500,
             textTransform: "uppercase",
             color: textColor,
-            lineHeight: "18px",
+            lineHeight: "14px",
             transition,
           }}
         >
@@ -545,12 +528,12 @@ function IndexRow({
         </span>
         <span
           style={{
-            fontSize: 14,
-            letterSpacing: "-0.06em",
+            fontSize: 11,
+            letterSpacing: "-0.04em",
             fontWeight: 500,
             textTransform: "uppercase",
             color: textColor,
-            lineHeight: "18px",
+            lineHeight: "14px",
             transition,
           }}
         >
@@ -563,12 +546,12 @@ function IndexRow({
         style={{
           width: 280,
           flexShrink: 0,
-          fontSize: 13,
-          letterSpacing: "-0.06em",
+          fontSize: 11,
+          letterSpacing: "-0.04em",
           fontWeight: 500,
           textTransform: "uppercase",
           color: textColor,
-          lineHeight: "16px",
+          lineHeight: "14px",
           transition,
         }}
       >
@@ -610,6 +593,370 @@ function IndexRow({
   );
 }
 
+// ─── Stamp ────────────────────────────────────────────────────────────────────
+
+const NEIGHBOURHOOD_STAMPS: Record<Neighbourhood, string> = {
+  "LESLIEVILLE":       "/Yonge.svg",
+  "PARKDALE":          "/Dufferin.svg",
+  "KENSINGTON":        "/Kensington.svg",
+  "TRINITY BELLWOODS": "/TrinityBellwoods.svg",
+  "RIVERSIDE":         "/Harbourfront.svg",
+  "CORK TOWN":         "/CabbageTown.svg",
+  "THE ANNEX":         "/Annex.svg",
+};
+
+const NEIGHBOURHOOD_ROTATION: Record<Neighbourhood, number> = {
+  "LESLIEVILLE":       -2,
+  "PARKDALE":           1.5,
+  "KENSINGTON":        -1.5,
+  "TRINITY BELLWOODS":  2,
+  "RIVERSIDE":         -1,
+  "CORK TOWN":          1,
+  "THE ANNEX":         -2.5,
+};
+
+// ─── Stamp lightbox ───────────────────────────────────────────────────────────
+
+function StampLightbox({
+  neighbourhood,
+  onClose,
+}: {
+  neighbourhood: Neighbourhood;
+  onClose: () => void;
+}) {
+  const cardRef  = useRef<HTMLDivElement>(null);
+  const shineRef = useRef<HTMLDivElement>(null);
+  const src = NEIGHBOURHOOD_STAMPS[neighbourhood];
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const card  = cardRef.current;
+    const shine = shineRef.current;
+    if (!card) return;
+    const rect = card.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width  - 0.5;
+    const y = (e.clientY - rect.top)  / rect.height - 0.5;
+
+    gsap.to(card, {
+      rotateX: -y * 18,
+      rotateY:  x * 18,
+      transformPerspective: 1000,
+      duration: 0.2,
+      ease: "power2.out",
+    });
+
+    if (shine) {
+      gsap.to(shine, {
+        x: x * rect.width  * 0.6,
+        y: y * rect.height * 0.6,
+        opacity: 0.7,
+        duration: 0.15,
+        ease: "power2.out",
+      });
+    }
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    if (cardRef.current) {
+      gsap.to(cardRef.current, { rotateX: 0, rotateY: 0, duration: 0.9, ease: "elastic.out(1, 0.4)" });
+    }
+    if (shineRef.current) {
+      gsap.to(shineRef.current, { opacity: 0, duration: 0.3 });
+    }
+  }, []);
+
+  return createPortal(
+    <motion.div
+      key="lightbox-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.42)",
+        backdropFilter: "blur(5px)",
+        WebkitBackdropFilter: "blur(5px)",
+        zIndex: 999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        cursor: "pointer",
+      }}
+    >
+      <motion.div
+        key="lightbox-card"
+        initial={{ scale: 0.82, opacity: 0, y: 16 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.88, opacity: 0, y: 8 }}
+        transition={{ type: "spring", stiffness: 380, damping: 26 }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{ cursor: "default", transformStyle: "preserve-3d" }}
+      >
+        {/* Card — warm paper */}
+        <div
+          ref={cardRef}
+          style={{
+            background: "#F7F2E8",
+            backgroundImage: [
+              "radial-gradient(ellipse at 30% 25%, rgba(255,245,210,0.7) 0%, transparent 55%)",
+              "radial-gradient(ellipse at 75% 80%, rgba(210,200,180,0.35) 0%, transparent 50%)",
+            ].join(", "),
+            borderRadius: 6,
+            padding: "40px 40px 30px",
+            boxShadow: "0 28px 72px rgba(0,0,0,0.22), 0 2px 10px rgba(0,0,0,0.1)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 22,
+            transformStyle: "preserve-3d",
+            transformOrigin: "center center",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {/* Paper grain */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")`,
+              opacity: 0.055,
+              pointerEvents: "none",
+              mixBlendMode: "multiply",
+            }}
+          />
+
+          {/* Shine */}
+          <div
+            ref={shineRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "radial-gradient(circle at center, rgba(255,255,255,0.7) 0%, transparent 60%)",
+              opacity: 0,
+              pointerEvents: "none",
+              mixBlendMode: "overlay",
+            }}
+          />
+
+          {/* Stamp */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`${neighbourhood} stamp`}
+            style={{
+              display: "block",
+              width: 380,
+              height: 380,
+              objectFit: "contain",
+              transform: `rotate(${NEIGHBOURHOOD_ROTATION[neighbourhood]}deg)`,
+            }}
+          />
+
+          {/* Neighbourhood label */}
+          <div
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.18em",
+              fontWeight: 600,
+              textTransform: "uppercase",
+              color: "#AAAAAA",
+              fontFamily: '"Geist", system-ui, sans-serif',
+            }}
+          >
+            {neighbourhood}
+          </div>
+        </div>
+
+        {/* Hint */}
+        <div
+          style={{
+            marginTop: 14,
+            textAlign: "center",
+            fontSize: 10,
+            letterSpacing: "0.06em",
+            fontWeight: 500,
+            textTransform: "uppercase",
+            color: "rgba(255,255,255,0.35)",
+            fontFamily: '"Geist", system-ui, sans-serif',
+          }}
+        >
+          Click outside to close
+        </div>
+      </motion.div>
+    </motion.div>,
+    document.body
+  );
+}
+
+// ─── Stamp (detail panel) ─────────────────────────────────────────────────────
+
+function Stamp({
+  neighbourhood,
+  isCollected,
+  size = 140,
+}: {
+  neighbourhood: Neighbourhood;
+  isCollected: boolean;
+  size?: number;
+}) {
+  const stampRef      = useRef<HTMLDivElement>(null);
+  const shadowRef     = useRef<HTMLDivElement>(null);
+  const tiltRef       = useRef<HTMLDivElement>(null);
+  const inShineRef    = useRef<HTMLDivElement>(null);
+  const prevCollected = useRef<boolean | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  const handleTiltMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isCollected) return;
+    const el = tiltRef.current;
+    const shine = inShineRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width  - 0.5;
+    const y = (e.clientY - rect.top)  / rect.height - 0.5;
+    gsap.to(el, { rotateX: -y * 14, rotateY: x * 14, transformPerspective: 600, duration: 0.2, ease: "power2.out" });
+    if (shine) gsap.to(shine, { x: x * size * 0.5, y: y * size * 0.5, opacity: 0.65, duration: 0.15, ease: "power2.out" });
+  }, [isCollected, size]);
+
+  const handleTiltLeave = useCallback(() => {
+    if (tiltRef.current) gsap.to(tiltRef.current, { rotateX: 0, rotateY: 0, duration: 0.7, ease: "elastic.out(1, 0.5)" });
+    if (inShineRef.current) gsap.to(inShineRef.current, { opacity: 0, duration: 0.3 });
+  }, []);
+
+  useEffect(() => {
+    const el     = stampRef.current;
+    const shadow = shadowRef.current;
+    if (!el) return;
+
+    const rot = NEIGHBOURHOOD_ROTATION[neighbourhood];
+
+    if (isCollected) {
+      const justCollected = prevCollected.current === false;
+      gsap.killTweensOf([el, shadow]);
+
+      if (justCollected) {
+        const tl = gsap.timeline();
+        tl.set(el, { y: -80, scaleX: 1, scaleY: 1, opacity: 0, rotation: rot + 5 })
+          .to(el, { y: 0, rotation: rot, duration: 0.18, ease: "power4.in" })
+          .set(el, { opacity: 1, scaleX: 1.1, scaleY: 0.82 })
+          .to(el, { scaleX: 1, scaleY: 1, duration: 0.55, ease: "elastic.out(1.1, 0.45)" });
+
+        if (shadow) {
+          gsap.set(shadow, { scale: 0.75, opacity: 0.5 });
+          gsap.to(shadow, { scale: 1.6, opacity: 0, duration: 0.45, ease: "power2.out", delay: 0.18 });
+        }
+      } else {
+        gsap.set(el, { opacity: 0, y: 6, scale: 0.9, rotation: rot });
+        gsap.to(el, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "back.out(1.6)" });
+      }
+    } else {
+      gsap.to(el, {
+        y: -20, opacity: 0, scale: 0.88,
+        rotation: NEIGHBOURHOOD_ROTATION[neighbourhood] - 6,
+        duration: 0.22, ease: "power2.in",
+      });
+    }
+
+    prevCollected.current = isCollected;
+  }, [isCollected, neighbourhood]);
+
+  const src = NEIGHBOURHOOD_STAMPS[neighbourhood];
+  const rot = NEIGHBOURHOOD_ROTATION[neighbourhood];
+
+  return (
+    <>
+      {/* Outer: tilt container */}
+      <div
+        ref={tiltRef}
+        onMouseMove={handleTiltMove}
+        onMouseLeave={handleTiltLeave}
+        onClick={() => isCollected && setLightboxOpen(true)}
+        style={{
+          position: "relative",
+          width: size,
+          height: size,
+          flexShrink: 0,
+          overflow: "visible",
+          cursor: isCollected ? "zoom-in" : "default",
+          transformStyle: "preserve-3d",
+          transformOrigin: "center center",
+        }}
+      >
+        {/* Impact shadow */}
+        <div
+          ref={shadowRef}
+          style={{
+            position: "absolute",
+            bottom: -6,
+            left: "10%",
+            right: "10%",
+            height: 12,
+            borderRadius: "50%",
+            background: "rgba(0,0,0,0.18)",
+            filter: "blur(6px)",
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* Stamp */}
+        <div
+          ref={stampRef}
+          style={{
+            opacity: 0,
+            width: size,
+            height: size,
+            transformOrigin: "center bottom",
+            transform: `rotate(${rot}deg)`,
+            position: "relative",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={`${neighbourhood} stamp`}
+            style={{ display: "block", width: "100%", height: "100%", objectFit: "contain" }}
+          />
+
+          {/* In-page tilt shine */}
+          <div
+            ref={inShineRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "radial-gradient(circle at center, rgba(255,255,255,0.5) 0%, transparent 65%)",
+              opacity: 0,
+              pointerEvents: "none",
+              mixBlendMode: "overlay",
+            }}
+          />
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {lightboxOpen && (
+          <StampLightbox
+            key="stamp-lightbox"
+            neighbourhood={neighbourhood}
+            onClose={() => setLightboxOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 // ─── Detail panel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({
@@ -621,6 +968,17 @@ function DetailPanel({
   isCollected: boolean;
   onCollect: () => void;
 }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Reset active photo when box changes
+  useEffect(() => { setActiveIdx(0); }, [box.id]);
+
+  const hasRealPhotos = isUploaded(box);
+  const photos = hasRealPhotos ? box.images! : null;
+  const activePhotoSrc = hasRealPhotos
+    ? photos![activeIdx] ?? photos![0]
+    : imgUrl(box, 800, 1000);
+
   return (
     <div
       style={{
@@ -649,12 +1007,12 @@ function DetailPanel({
         {/* Caption */}
         <span
           style={{
-            fontSize: 12,
-            letterSpacing: "-0.04em",
+            fontSize: 10,
+            letterSpacing: "-0.02em",
             fontWeight: 500,
-            marginBottom: 12,
-            color: "#202020",
-            lineHeight: "16px",
+            marginBottom: 10,
+            color: "#AAAAAA",
+            lineHeight: "14px",
             fontFamily: '"Geist", system-ui, sans-serif',
           }}
         >
@@ -671,22 +1029,24 @@ function DetailPanel({
             justifyContent: "space-between",
           }}
         >
-          {/* Title */}
-          <span
-            style={{
-              fontSize: 32,
-              lineHeight: "44px",
-              letterSpacing: "-0.05em",
-              fontWeight: 600,
-              textTransform: "uppercase",
-              marginBottom: 40,
-              color: "#202020",
-              fontFamily: '"Geist", system-ui, sans-serif',
-              display: "block",
-            }}
-          >
-            {box.title}
-          </span>
+          {/* Title + stamp */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <span
+              style={{
+                fontSize: 22,
+                lineHeight: "28px",
+                letterSpacing: "-0.05em",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                color: "#202020",
+                fontFamily: '"Geist", system-ui, sans-serif',
+                display: "block",
+              }}
+            >
+              {box.title}
+            </span>
+            <Stamp neighbourhood={box.neighbourhood} isCollected={isCollected} size={200} />
+          </div>
 
           {/* Bottom section */}
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -697,34 +1057,36 @@ function DetailPanel({
               <Field label="Location" value={box.address} />
             </div>
 
-            {/* More photos */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <span
-                style={{
-                  fontSize: 11,
-                  letterSpacing: "-0.04em",
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                  color: "#202020",
-                  lineHeight: "14px",
-                  fontFamily: '"Inter", system-ui, sans-serif',
-                }}
-              >
-                More Photos
-              </span>
-              <div style={{ display: "flex", gap: 2, height: 129 }}>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
-                    <Image
-                      src={imgUrl(box.id * 10 + i, 200, 258)}
-                      alt=""
-                      fill
-                      style={{ objectFit: "cover" }}
-                    />
-                  </div>
-                ))}
+            {/* Photo strip */}
+            {hasRealPhotos && photos!.length > 1 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <span style={{ fontSize: 9, letterSpacing: "0.06em", fontWeight: 500, textTransform: "uppercase", color: "#AAAAAA", lineHeight: "12px", fontFamily: '"Geist", system-ui, sans-serif' }}>
+                  Photos ({photos!.length})
+                </span>
+                <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 2 }}>
+                  {photos!.map((src, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveIdx(i)}
+                      style={{
+                        flexShrink: 0,
+                        width: 72,
+                        height: 72,
+                        position: "relative",
+                        overflow: "hidden",
+                        background: "#1A1A1A",
+                        border: i === activeIdx ? "2px solid #202020" : "2px solid transparent",
+                        borderRadius: 3,
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      <Image src={src} alt="" fill style={{ objectFit: "contain" }} unoptimized />
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Collect button */}
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -754,12 +1116,12 @@ function DetailPanel({
                 )}
                 <span
                   style={{
-                    fontSize: 13,
-                    letterSpacing: "-0.06em",
+                    fontSize: 11,
+                    letterSpacing: "-0.04em",
                     fontWeight: 500,
                     textTransform: "uppercase",
                     color: isCollected ? "#FFFFFF" : "#202020",
-                    lineHeight: "16px",
+                    lineHeight: "14px",
                   }}
                 >
                   {isCollected ? "Collected" : "Collect"}
@@ -771,13 +1133,14 @@ function DetailPanel({
       </div>
 
       {/* Main image */}
-      <div style={{ flex: 1, alignSelf: "stretch", position: "relative", overflow: "hidden" }}>
+      <div style={{ flex: 1, alignSelf: "stretch", position: "relative", overflow: "hidden", background: hasRealPhotos ? "#111" : undefined }}>
         <Image
-          src={imgUrl(box.id, 800, 1000)}
+          src={activePhotoSrc}
           alt={box.title}
           fill
-          style={{ objectFit: "cover" }}
+          style={{ objectFit: hasRealPhotos ? "contain" : "cover" }}
           priority
+          unoptimized={hasRealPhotos}
         />
       </div>
     </div>
@@ -786,28 +1149,28 @@ function DetailPanel({
 
 function Field({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <span
         style={{
-          fontSize: 11,
-          letterSpacing: "-0.04em",
+          fontSize: 9,
+          letterSpacing: "0.06em",
           fontWeight: 500,
           textTransform: "uppercase",
-          color: "#202020",
-          lineHeight: "14px",
-          fontFamily: '"Inter", system-ui, sans-serif',
+          color: "#AAAAAA",
+          lineHeight: "12px",
+          fontFamily: '"Geist", system-ui, sans-serif',
         }}
       >
         {label}
       </span>
       <span
         style={{
-          fontSize: 14,
-          letterSpacing: "-0.05em",
+          fontSize: 12,
+          letterSpacing: "-0.03em",
           fontWeight: 500,
           color: "#202020",
-          lineHeight: "18px",
-          fontFamily: '"Inter", system-ui, sans-serif',
+          lineHeight: "16px",
+          fontFamily: '"Geist", system-ui, sans-serif',
         }}
       >
         {value}
