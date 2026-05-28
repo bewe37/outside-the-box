@@ -1,210 +1,134 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
-import { boxes, NEIGHBOURHOODS, type Box, type Neighbourhood } from "@/lib/data";
-import { SiteNav } from "@/app/components/site-nav";
+import { boxes, formatNeighbourhood, formatYear, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
+import { DetailPanel } from "@/app/components/DetailPanel";
+import { size, tracking, leading } from "@/lib/typography";
+import { useNav } from "@/app/components/nav-context";
+import { useAuth } from "@/app/components/auth-context";
+import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 import gsap from "gsap";
 
-const GridView = dynamic(() => import("./GridView3D"), { ssr: false });
 const StreetView = dynamic(() => import("./StreetView3D"), { ssr: false });
 
-type ViewMode = "INDEX" | "GRID" | "PHOTOS";
+type ViewMode = "INDEX" | "PHOTOS";
 
-function imgUrl(box: Box, w: number, h: number): string {
-  if (box.images && box.images.length > 0) return box.images[0];
-  return `https://picsum.photos/seed/box${box.id}/${w}/${h}`;
+// Tiny shared blur placeholder used by every <Image>. Paints instantly while
+// the real (multi-hundred-KB) photo streams in.
+const BLUR_PLACEHOLDER =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="%23E8E8E8"/></svg>';
+
+// Cover photo. The gallery only shows boxes with at least one upload, so this
+// always resolves to a real path; the empty-string fallback is just a guard.
+function imgUrl(box: Box): string {
+  return box.images?.[0] ?? "";
 }
 
-function isUploaded(box: Box): boolean {
-  return !!(box.images && box.images.length > 0);
-}
-
-// ─── Nav ──────────────────────────────────────────────────────────────────────
-
-function Nav({
-  view,
-  onViewChange,
-  collectedCount,
-  photoColumns,
-  onColumnsChange,
-}: {
-  view: ViewMode;
-  onViewChange: (v: ViewMode) => void;
-  collectedCount: number;
-  photoColumns: number;
-  onColumnsChange: (n: number) => void;
-}) {
-  const viewControls = (
-    <>
-      {(["GRID", "INDEX", "PHOTOS"] as ViewMode[]).map((v) => (
-        <button
-          key={v}
-          onClick={() => onViewChange(v)}
-          style={{ display: "flex", alignItems: "center", gap: 5, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
-        >
-          {view === v && (
-            <span style={{ width: 4, height: 8, borderRadius: 1, backgroundColor: "#202020", flexShrink: 0, display: "inline-block" }} />
-          )}
-          <span style={{ fontSize: 11, letterSpacing: "-0.04em", fontWeight: 500, textTransform: "uppercase", color: view === v ? "#202020" : "#A8A8A8", lineHeight: "14px" }}>
-            {v}
-          </span>
-        </button>
-      ))}
-
-      {view === "PHOTOS" && (
-        <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8", marginLeft: 2 }}>
-          <input
-            type="range"
-            className="col-slider"
-            min={2}
-            max={6}
-            value={photoColumns}
-            onChange={(e) => onColumnsChange(Number(e.target.value))}
-          />
-          <span style={{ fontSize: 11, letterSpacing: "-0.04em", fontWeight: 500, color: "#202020", lineHeight: "14px", minWidth: 10, fontFamily: "inherit" }}>
-            {photoColumns}
-          </span>
-        </div>
-      )}
-    </>
-  );
-
-  return (
-    <SiteNav
-      collectedCount={collectedCount}
-      right={viewControls}
-      borderBottom={view === "GRID"}
-    />
-  );
-}
-
-// ─── Filter bar ───────────────────────────────────────────────────────────────
-
-function FilterBar({
-  active,
-  onChange,
-}: {
-  active: Neighbourhood | "ALL";
-  onChange: (n: Neighbourhood | "ALL") => void;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        paddingInline: 16,
-        borderTop: "1px solid #D3D3D3",
-        borderBottom: "1px solid #D3D3D3",
-        flexShrink: 0,
-      }}
-    >
-      {/* Label */}
-      <div
-        style={{
-          marginRight: 20,
-          flexShrink: 0,
-          paddingTop: 11,
-          paddingRight: 16,
-          paddingBottom: 11,
-          borderRight: "1px solid #D3D3D3",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            letterSpacing: "-0.04em",
-            fontWeight: 500,
-            textTransform: "uppercase",
-            color: "#202020",
-            lineHeight: "14px",
-          }}
-        >
-          Neighbourhood
-        </span>
-      </div>
-
-      {/* Pills */}
-      <div style={{ display: "flex", gap: 4 }}>
-        {(["ALL", ...NEIGHBOURHOODS] as const).map((n) => {
-          const isActive = active === n;
-          return (
-            <button
-              key={n}
-              onClick={() => onChange(n)}
-              style={{
-                fontSize: 11,
-                letterSpacing: "-0.04em",
-                fontWeight: 500,
-                textTransform: "uppercase",
-                lineHeight: "14px",
-                paddingBlock: 5,
-                paddingInline: 10,
-                borderRadius: 2,
-                border: "none",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                backgroundColor: isActive ? "#202020" : "transparent",
-                color: isActive ? "#FFFFFF" : "#202020",
-              }}
-            >
-              {n}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ─── Index page ───────────────────────────────────────────────────────────────
 
 export default function GalleryPage() {
   const [view, setView] = useState<ViewMode>("PHOTOS");
-  const [filter, setFilter] = useState<Neighbourhood | "ALL">("ALL");
-  const [selected, setSelected] = useState<Box | null>(null);
-  const [hovered, setHovered] = useState<Box | null>(null);
   const [collected, setCollected] = useState<Set<number>>(new Set());
   const [gridSelected, setGridSelected] = useState<Box | null>(null);
   const [photoColumns, setPhotoColumns] = useState(3);
-  const [allBoxes, setAllBoxes] = useState<Box[]>(boxes);
+  const { setRight } = useNav();
+  const { user } = useAuth();
+  const router = useRouter();
+  // Only show boxes that have at least one admin-uploaded photo.
+  const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
+  const [allBoxes, setAllBoxes] = useState<Box[]>(() => boxes.filter(hasUpload));
+
+  const filtered = allBoxes;
 
   useEffect(() => {
     fetch("/api/boxes")
       .then((r) => r.json())
       .then((extra: Box[]) => {
-        if (extra.length > 0) setAllBoxes([...boxes, ...extra]);
+        setAllBoxes([...boxes, ...extra].filter(hasUpload));
       })
       .catch(() => {});
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem("otb_collected");
-      if (stored) setCollected(new Set(JSON.parse(stored)));
-    } catch {}
-  }, []);
+    if (!user) { setCollected(new Set()); return; }
+    supabase
+      .from("collections")
+      .select("box_id")
+      .eq("user_id", user.id)
+      .then(({ data }) => {
+        if (data) setCollected(new Set(data.map((r) => r.box_id)));
+      });
+  }, [user]);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setGridSelected(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setGridSelected(null); return; }
+      if (!gridSelected) return;
+      const i = filtered.findIndex((b) => b.id === gridSelected.id);
+      if (e.key === "ArrowLeft" && i > 0) setGridSelected(filtered[i - 1]);
+      if (e.key === "ArrowRight" && i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [gridSelected, filtered]);
 
-  function toggleCollect(id: number) {
+  useEffect(() => {
+    const viewControls = (
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        {(["PHOTOS", "INDEX"] as ViewMode[]).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
+          >
+            <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: view === v ? "#202020" : "#A8A8A8" }}>
+              {view === v ? `(${v})` : v}
+            </span>
+          </button>
+        ))}
+        {view === "PHOTOS" && (
+          <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8" }}>
+            <input
+              type="range"
+              className="col-slider"
+              min={2}
+              max={6}
+              value={photoColumns}
+              onChange={(e) => setPhotoColumns(Number(e.target.value))}
+            />
+            <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "#202020", minWidth: 10, fontFamily: "inherit" }}>
+              {photoColumns}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+    setRight(viewControls);
+    return () => setRight(null);
+  }, [view, photoColumns, setRight]);
+
+  async function toggleCollect(id: number) {
+    if (!user) { router.push("/collection"); return; }
+    const isCollected = collected.has(id);
+    // Optimistic update
     setCollected((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
+      if (isCollected) next.delete(id);
       else next.add(id);
-      localStorage.setItem("otb_collected", JSON.stringify([...next]));
       return next;
     });
+    if (isCollected) {
+      await supabase.from("collections").delete().match({ user_id: user.id, box_id: id });
+    } else {
+      await supabase.from("collections").insert({ user_id: user.id, box_id: id });
+    }
   }
-
-  const filtered = filter === "ALL" ? allBoxes : allBoxes.filter((b) => b.neighbourhood === filter);
 
   return (
     <div
@@ -218,25 +142,6 @@ export default function GalleryPage() {
         overflow: "hidden",
       }}
     >
-      <Nav view={view} onViewChange={setView} collectedCount={collected.size} photoColumns={photoColumns} onColumnsChange={setPhotoColumns} />
-      <AnimatePresence>
-        {(view === "INDEX" || view === "PHOTOS") && (
-          <motion.div
-            key="filterbar"
-            variants={{
-              hidden: { opacity: 0, y: -6 },
-              visible: { opacity: 1, y: 0, transition: { duration: 0.3, delay: 0.15, ease: [0.25, 0.1, 0.25, 1] } },
-              exit:    { opacity: 0, y: -6, transition: { duration: 0.12, ease: [0.25, 0.1, 0.25, 1] } },
-            }}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          >
-            <FilterBar active={filter} onChange={(n) => { setFilter(n); setSelected(null); }} />
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <div style={{ flex: 1, overflow: "hidden", display: "flex", position: "relative" }}>
         <AnimatePresence mode="wait">
           {view === "INDEX" ? (
@@ -250,28 +155,8 @@ export default function GalleryPage() {
             >
               <IndexView
                 boxes={filtered}
-                selected={selected}
-                hovered={hovered}
                 collected={collected}
-                onSelect={(b) => setSelected(selected?.id === b.id ? null : b)}
-                onHover={setHovered}
-                onCollect={toggleCollect}
-              />
-            </motion.div>
-          ) : view === "GRID" ? (
-            <motion.div
-              key="grid"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              style={{ display: "flex", flex: 1, overflow: "hidden" }}
-            >
-              <GridView
-                boxes={filtered}
-                collected={collected}
-                onCollect={toggleCollect}
-                onGridSelect={setGridSelected}
+                onSelect={setGridSelected}
               />
             </motion.div>
           ) : (
@@ -295,51 +180,56 @@ export default function GalleryPage() {
         </AnimatePresence>
       </div>
 
-      {/* Grid detail panel — overlays entire page including nav */}
+      {/* Lightbox — centered modal over a blurred wash of the grid */}
       <AnimatePresence>
         {gridSelected && (
           <>
+            {/* Backdrop: solid white wash — fixed so it covers the nav too. */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.25 }}
+              transition={{ duration: 0.2 }}
               onClick={() => setGridSelected(null)}
               style={{
-                position: "absolute",
+                position: "fixed",
                 inset: 0,
-                background: "rgba(0,0,0,0.18)",
-                backdropFilter: "blur(2px)",
-                WebkitBackdropFilter: "blur(2px)",
+                backgroundColor: "rgba(255, 255, 255, 0.85)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
                 zIndex: 20,
                 cursor: "default",
               }}
             />
+            {/* Centered modal */}
             <motion.div
-              key={gridSelected.id}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
               style={{
-                position: "absolute",
-                right: 0,
-                top: 0,
-                bottom: 0,
-                width: 900,
-                backgroundColor: "#FFFFFF",
-                borderLeft: "1px solid #D3D3D3",
+                position: "fixed",
+                top: "50%",
+                left: "50%",
+                translate: "-50% -50%",
                 zIndex: 21,
-                overflow: "hidden",
-                willChange: "transform",
-                display: "flex",
               }}
             >
-              <DetailPanel
-                box={gridSelected}
-                isCollected={collected.has(gridSelected.id)}
-                onCollect={() => toggleCollect(gridSelected.id)}
-              />
+              {(() => {
+                const i = filtered.findIndex((b) => b.id === gridSelected.id);
+                return (
+                  <DetailPanel
+                    box={gridSelected}
+                    displayNumber={i + 1}
+                    isCollected={collected.has(gridSelected.id)}
+                    onCollect={() => toggleCollect(gridSelected.id)}
+                    onPrev={() => { if (i > 0) setGridSelected(filtered[i - 1]); }}
+                    onNext={() => { if (i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]); }}
+                    hasPrev={i > 0}
+                    hasNext={i >= 0 && i < filtered.length - 1}
+                  />
+                );
+              })()}
             </motion.div>
           </>
         )}
@@ -350,128 +240,147 @@ export default function GalleryPage() {
 
 // ─── Index view ───────────────────────────────────────────────────────────────
 
+// Preview is pinned to the hovered row's vertical position at a fixed X past
+// the text columns. Its actual width/height is derived per-image from the
+// photo's natural aspect ratio (see previewSize below).
+const HOVER_PREVIEW = {
+  left: 1120,        // pinned X (past the row's text columns)
+  maxEdge: 280,      // bounding box for either dimension
+  fallback: { width: 200, height: 280 }, // before aspect is known
+};
+
+// Fit (maxEdge × maxEdge) box while preserving an aspect ratio. Landscapes
+// become wider+shorter, portraits taller+narrower.
+function previewSize(aspect: number): { width: number; height: number } {
+  if (aspect >= 1) {
+    // Landscape or square — width hits max, height shrinks.
+    return { width: HOVER_PREVIEW.maxEdge, height: Math.round(HOVER_PREVIEW.maxEdge / aspect) };
+  }
+  // Portrait — height hits max, width shrinks.
+  return { width: Math.round(HOVER_PREVIEW.maxEdge * aspect), height: HOVER_PREVIEW.maxEdge };
+}
+
 function IndexView({
   boxes,
-  selected,
-  hovered,
   collected,
   onSelect,
-  onHover,
-  onCollect,
 }: {
   boxes: Box[];
-  selected: Box | null;
-  hovered: Box | null;
   collected: Set<number>;
   onSelect: (b: Box) => void;
-  onHover: (b: Box | null) => void;
-  onCollect: (id: number) => void;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [hoverY, setHoverY] = useState(0);
+  const [hovered, setHovered] = useState<Box | null>(null);
+  const [rowTop, setRowTop] = useState(0);
+  // box.id → aspect ratio (width / height). Loaded lazily on first hover.
+  const [aspects, setAspects] = useState<Map<number, number>>(new Map());
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // On row enter, measure the row's offset within the scroll container so the
+  // preview can pin to its vertical position. Only updates per row — not on
+  // every cursor move within the row.
+  function handleRowEnter(box: Box, e: React.MouseEvent) {
+    const container = containerRef.current;
+    if (!container) return;
+    const rowRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    setRowTop(rowRect.top - containerRect.top + container.scrollTop);
+    setHovered(box);
+
+    // Lazy-load the cover photo's natural dimensions on first hover. Cached
+    // afterwards so re-hovering the same row is instant.
+    if (!aspects.has(box.id)) {
+      const src = imgUrl(box);
+      if (!src) return;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          setAspects((prev) => new Map(prev).set(box.id, img.naturalWidth / img.naturalHeight));
+        }
+      };
+      img.src = src;
+    }
+  }
+
+  const hoveredAspect = hovered ? aspects.get(hovered.id) : undefined;
+  const hoveredSize = hoveredAspect ? previewSize(hoveredAspect) : HOVER_PREVIEW.fallback;
+  // Clamp so the preview never extends below the container's scroll height.
+  const container = containerRef.current;
+  const maxTop = container ? container.scrollTop + container.clientHeight - hoveredSize.height - 24 : rowTop;
+  const clampedTop = Math.min(rowTop, maxTop);
 
   return (
-    <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-      {/* List — fixed 1018px */}
-      <div
-        style={{
-          width: 1018,
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          overflowY: "auto",
-          paddingTop: 8,
-        }}
-      >
-        {boxes.map((box, i) => (
+    <div
+      ref={containerRef}
+      style={{
+        flex: 1,
+        position: "relative",
+        overflowY: "auto",
+        paddingTop: 8,
+      }}
+    >
+      {boxes.map((box, i) => (
+        <motion.div
+          key={box.id}
+          initial={{ opacity: 0, x: -10 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.22, delay: i * 0.035, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{ width: "fit-content" }}
+        >
+          <IndexRow
+            box={box}
+            displayNumber={i + 1}
+            isSelected={false}
+            isDimmed={hovered !== null && hovered.id !== box.id}
+            isCollected={collected.has(box.id)}
+            onSelect={() => onSelect(box)}
+            onMouseEnter={(e) => handleRowEnter(box, e)}
+            onMouseLeave={() => setHovered(null)}
+          />
+        </motion.div>
+      ))}
+
+      {/* Row-pinned hover preview. Positioned at a fixed X past the text columns. */}
+      <AnimatePresence>
+        {hovered && (
           <motion.div
-            key={box.id}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.22, delay: i * 0.035, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{ width: "100%" }}
+            key={hovered.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            style={{
+              position: "absolute",
+              left: HOVER_PREVIEW.left,
+              top: clampedTop,
+              width: hoveredSize.width,
+              height: hoveredSize.height,
+              overflow: "hidden",
+              pointerEvents: "none",
+              zIndex: 10,
+              willChange: "opacity",
+              boxShadow: "0 10px 32px rgba(0, 0, 0, 0.12)",
+              backgroundColor: "#FFFFFF",
+            }}
           >
-            <IndexRow
-              box={box}
-              isSelected={selected?.id === box.id}
-              isDimmed={(() => { const focusId = selected?.id ?? hovered?.id ?? null; return focusId !== null && focusId !== box.id; })()}
-              isCollected={collected.has(box.id)}
-              onSelect={() => onSelect(box)}
-              onMouseEnter={(e) => {
-                onHover(box);
-                if (panelRef.current) {
-                  const rowRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                  const panelRect = panelRef.current.getBoundingClientRect();
-                  setHoverY(rowRect.top - panelRect.top);
-                }
-              }}
-              onMouseLeave={() => onHover(null)}
+            <Image
+              src={imgUrl(hovered)}
+              alt={hovered.title}
+              fill
+              style={{ objectFit: "cover" }}
+              unoptimized
+              placeholder="blur"
+              blurDataURL={BLUR_PLACEHOLDER}
             />
           </motion.div>
-        ))}
-      </div>
-
-      {/* Detail panel — grows to fill remaining space */}
-      <div
-        ref={panelRef}
-        style={{
-          flex: 1,
-          borderLeft: "1px solid #D3D3D3",
-          position: "relative",
-          overflow: "hidden",
-          display: "flex",
-        }}
-      >
-        <AnimatePresence mode="wait">
-          {selected ? (
-            <motion.div
-              key={selected.id}
-              initial={{ opacity: 0, x: 12 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 12 }}
-              transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-              style={{ display: "flex", flex: 1, willChange: "transform, opacity" }}
-            >
-              <DetailPanel
-                box={selected}
-                isCollected={collected.has(selected.id)}
-                onCollect={() => onCollect(selected.id)}
-              />
-            </motion.div>
-          ) : hovered ? (
-            <motion.div
-              key={`hover-${hovered.id}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-              style={{
-                position: "absolute",
-                left: 25,
-                top: hoverY,
-                width: 132,
-                height: 200,
-                overflow: "hidden",
-                pointerEvents: "none",
-                willChange: "opacity",
-              }}
-            >
-              <Image
-                src={imgUrl(hovered, 264, 400)}
-                alt={hovered.title}
-                fill
-                style={{ objectFit: "cover" }}
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 function IndexRow({
   box,
+  displayNumber,
   isSelected,
   isDimmed,
   isCollected,
@@ -480,6 +389,7 @@ function IndexRow({
   onMouseLeave,
 }: {
   box: Box;
+  displayNumber: number;
   isSelected: boolean;
   isDimmed: boolean;
   isCollected: boolean;
@@ -505,35 +415,33 @@ function IndexRow({
         borderBottom: "1px solid #F0F0F0",
         cursor: "pointer",
         textAlign: "left",
-        width: "100%",
+        width: "fit-content",
         fontFamily: "inherit",
       }}
     >
       {/* Number + Title — 400px */}
-      <div style={{ width: 400, flexShrink: 0, display: "flex", paddingLeft: 16 }}>
+      <div style={{ width: 400, flexShrink: 0, display: "flex", paddingLeft: 16, paddingRight: 24, boxSizing: "border-box" }}>
         <span
           style={{
-            width: 44,
+            width: 56,
             flexShrink: 0,
-            fontSize: 11,
-            letterSpacing: "-0.04em",
-            fontWeight: 500,
+            fontSize: size.meta,
+            lineHeight: leading.meta,
+            letterSpacing: tracking.label,
             textTransform: "uppercase",
             color: textColor,
-            lineHeight: "14px",
             transition,
           }}
         >
-          ({String(box.id).padStart(3, "0")})
+          ({String(displayNumber).padStart(3, "0")})
         </span>
         <span
           style={{
-            fontSize: 11,
-            letterSpacing: "-0.04em",
-            fontWeight: 500,
+            fontSize: size.meta,
+            lineHeight: leading.meta,
+            letterSpacing: tracking.label,
             textTransform: "uppercase",
             color: textColor,
-            lineHeight: "14px",
             transition,
           }}
         >
@@ -541,21 +449,40 @@ function IndexRow({
         </span>
       </div>
 
+      {/* Artist — 180px */}
+      <span
+        style={{
+          width: 180,
+          flexShrink: 0,
+          paddingRight: 24,
+          boxSizing: "border-box",
+          fontSize: size.meta,
+          lineHeight: leading.meta,
+          letterSpacing: tracking.label,
+          textTransform: "uppercase",
+          color: textColor,
+          transition,
+        }}
+      >
+        {box.artist}
+      </span>
+
       {/* Address — 280px */}
       <span
         style={{
           width: 280,
           flexShrink: 0,
-          fontSize: 11,
-          letterSpacing: "-0.04em",
-          fontWeight: 500,
+          paddingRight: 24,
+          boxSizing: "border-box",
+          fontSize: size.meta,
+          lineHeight: leading.meta,
+          letterSpacing: tracking.label,
           textTransform: "uppercase",
           color: textColor,
-          lineHeight: "14px",
           transition,
         }}
       >
-        {box.address}
+        {formatAddress(box.address)}
       </span>
 
       {/* Neighbourhood — 220px */}
@@ -563,22 +490,21 @@ function IndexRow({
         style={{
           width: 220,
           flexShrink: 0,
-          fontSize: 13,
-          letterSpacing: "-0.06em",
-          fontWeight: 500,
+          fontSize: size.meta,
+          lineHeight: leading.meta,
+          letterSpacing: tracking.label,
           textTransform: "uppercase",
           color: textColor,
-          lineHeight: "16px",
           transition,
         }}
       >
-        {box.neighbourhood}
+        {formatNeighbourhood(box.neighbourhood)}
       </span>
 
       {/* Collected dot */}
       <span
         style={{
-          marginLeft: "auto",
+          marginLeft: 16,
           marginRight: 16,
           width: 5,
           height: 5,
@@ -595,7 +521,8 @@ function IndexRow({
 
 // ─── Stamp ────────────────────────────────────────────────────────────────────
 
-const NEIGHBOURHOOD_STAMPS: Record<Neighbourhood, string> = {
+// Built-in neighbourhoods have stamp graphics; custom ones fall back to text.
+const NEIGHBOURHOOD_STAMPS: Record<string, string> = {
   "LESLIEVILLE":       "/Yonge.svg",
   "PARKDALE":          "/Dufferin.svg",
   "KENSINGTON":        "/Kensington.svg",
@@ -605,7 +532,7 @@ const NEIGHBOURHOOD_STAMPS: Record<Neighbourhood, string> = {
   "THE ANNEX":         "/Annex.svg",
 };
 
-const NEIGHBOURHOOD_ROTATION: Record<Neighbourhood, number> = {
+const NEIGHBOURHOOD_ROTATION: Record<string, number> = {
   "LESLIEVILLE":       -2,
   "PARKDALE":           1.5,
   "KENSINGTON":        -1.5,
@@ -954,228 +881,6 @@ function Stamp({
         )}
       </AnimatePresence>
     </>
-  );
-}
-
-// ─── Detail panel ─────────────────────────────────────────────────────────────
-
-function DetailPanel({
-  box,
-  isCollected,
-  onCollect,
-}: {
-  box: Box;
-  isCollected: boolean;
-  onCollect: () => void;
-}) {
-  const [activeIdx, setActiveIdx] = useState(0);
-
-  // Reset active photo when box changes
-  useEffect(() => { setActiveIdx(0); }, [box.id]);
-
-  const hasRealPhotos = isUploaded(box);
-  const photos = hasRealPhotos ? box.images! : null;
-  const activePhotoSrc = hasRealPhotos
-    ? photos![activeIdx] ?? photos![0]
-    : imgUrl(box, 800, 1000);
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 60,
-        paddingTop: 16,
-        paddingRight: 16,
-        paddingBottom: 40,
-        paddingLeft: 16,
-        flex: 1,
-        overflow: "hidden",
-      }}
-    >
-      {/* Metadata column */}
-      <div
-        style={{
-          width: 260,
-          flexShrink: 0,
-          flexGrow: 0,
-          display: "flex",
-          flexDirection: "column",
-          height: "100%",
-        }}
-      >
-        {/* Caption */}
-        <span
-          style={{
-            fontSize: 10,
-            letterSpacing: "-0.02em",
-            fontWeight: 500,
-            marginBottom: 10,
-            color: "#AAAAAA",
-            lineHeight: "14px",
-            fontFamily: '"Geist", system-ui, sans-serif',
-          }}
-        >
-          ({String(box.id).padStart(3, "0")}) CAPTURED {box.captured}
-        </span>
-
-        {/* Inner column — space-between */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 16,
-            flex: 1,
-            justifyContent: "space-between",
-          }}
-        >
-          {/* Title + stamp */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-            <span
-              style={{
-                fontSize: 22,
-                lineHeight: "28px",
-                letterSpacing: "-0.05em",
-                fontWeight: 600,
-                textTransform: "uppercase",
-                color: "#202020",
-                fontFamily: '"Geist", system-ui, sans-serif',
-                display: "block",
-              }}
-            >
-              {box.title}
-            </span>
-            <Stamp neighbourhood={box.neighbourhood} isCollected={isCollected} size={200} />
-          </div>
-
-          {/* Bottom section */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Fields */}
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <Field label="Artist" value={box.artist} />
-              <Field label="Year" value={String(box.year)} />
-              <Field label="Location" value={box.address} />
-            </div>
-
-            {/* Photo strip */}
-            {hasRealPhotos && photos!.length > 1 && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <span style={{ fontSize: 9, letterSpacing: "0.06em", fontWeight: 500, textTransform: "uppercase", color: "#AAAAAA", lineHeight: "12px", fontFamily: '"Geist", system-ui, sans-serif' }}>
-                  Photos ({photos!.length})
-                </span>
-                <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 2 }}>
-                  {photos!.map((src, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setActiveIdx(i)}
-                      style={{
-                        flexShrink: 0,
-                        width: 72,
-                        height: 72,
-                        position: "relative",
-                        overflow: "hidden",
-                        background: "#1A1A1A",
-                        border: i === activeIdx ? "2px solid #202020" : "2px solid transparent",
-                        borderRadius: 3,
-                        cursor: "pointer",
-                        padding: 0,
-                      }}
-                    >
-                      <Image src={src} alt="" fill style={{ objectFit: "contain" }} unoptimized />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Collect button */}
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <button
-                onClick={onCollect}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  flex: 1,
-                  paddingBlock: 10,
-                  paddingInline: 16,
-                  border: "1px solid #202020",
-                  background: isCollected ? "#202020" : "transparent",
-                  cursor: "pointer",
-                  fontFamily: '"Inter", system-ui, sans-serif',
-                }}
-              >
-                {isCollected ? (
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                    <path d="M2 6.5L5.5 10L11 3" stroke="#FFFFFF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                ) : (
-                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                    <path d="M6.5 2V11M2 6.5H11" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                )}
-                <span
-                  style={{
-                    fontSize: 11,
-                    letterSpacing: "-0.04em",
-                    fontWeight: 500,
-                    textTransform: "uppercase",
-                    color: isCollected ? "#FFFFFF" : "#202020",
-                    lineHeight: "14px",
-                  }}
-                >
-                  {isCollected ? "Collected" : "Collect"}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main image */}
-      <div style={{ flex: 1, alignSelf: "stretch", position: "relative", overflow: "hidden", background: hasRealPhotos ? "#111" : undefined }}>
-        <Image
-          src={activePhotoSrc}
-          alt={box.title}
-          fill
-          style={{ objectFit: hasRealPhotos ? "contain" : "cover" }}
-          priority
-          unoptimized={hasRealPhotos}
-        />
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span
-        style={{
-          fontSize: 9,
-          letterSpacing: "0.06em",
-          fontWeight: 500,
-          textTransform: "uppercase",
-          color: "#AAAAAA",
-          lineHeight: "12px",
-          fontFamily: '"Geist", system-ui, sans-serif',
-        }}
-      >
-        {label}
-      </span>
-      <span
-        style={{
-          fontSize: 12,
-          letterSpacing: "-0.03em",
-          fontWeight: 500,
-          color: "#202020",
-          lineHeight: "16px",
-          fontFamily: '"Geist", system-ui, sans-serif',
-        }}
-      >
-        {value}
-      </span>
-    </div>
   );
 }
 

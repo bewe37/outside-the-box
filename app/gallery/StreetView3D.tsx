@@ -3,16 +3,53 @@
 import { useRef, useEffect } from "react";
 import Image from "next/image";
 import gsap from "gsap";
-import type { Box } from "@/lib/data";
+import { formatNeighbourhood, formatYear, type Box } from "@/lib/data";
+import { size, tracking, weight, leading } from "@/lib/typography";
 
 // Varied heights for masonry rhythm
 const HEIGHTS = [520, 360, 490, 580, 330, 465, 405, 545, 315, 475, 435, 370];
 function cardH(id: number) { return HEIGHTS[id % HEIGHTS.length]; }
-function imgUrl(id: number, w: number, h: number) {
-  return `https://picsum.photos/seed/box${id}/${w}/${h}`;
+
+// Tiny shared blur placeholder. Paints instantly while the real image streams in.
+// Inline SVG works as a data URL in `next/image` placeholders without base64.
+const BLUR_PLACEHOLDER =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="%23E8E8E8"/></svg>';
+// The gallery only renders boxes with uploads, so the first image is the cover.
+function cardSrc(box: Box) {
+  return box.images?.[0] ?? "";
 }
 
 const META_THRESHOLD = 4; // columns <= this → show metadata below image
+
+// Small label/value pair used in the masonry card's metadata strip.
+function CardMeta({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontSize: size.caption,
+          lineHeight: leading.caption,
+          letterSpacing: tracking.loose,
+          textTransform: "uppercase",
+          color: "#A8A8A8",
+          marginBottom: 2,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          fontSize: size.meta,
+          lineHeight: leading.meta,
+          letterSpacing: tracking.normal,
+          color: "#202020",
+        }}
+      >
+        {value}
+      </div>
+    </div>
+  );
+}
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
 
@@ -42,11 +79,15 @@ function MasonryCard({
         onClick={() => onSelect(box)}
       >
         <Image
-          src={imgUrl(box.id, 600, h)}
+          src={cardSrc(box)}
           alt={box.title}
           width={600}
           height={h}
-          style={{ width: "100%", height: "auto", display: "block" }}
+          style={{ width: "100%", height: "auto", display: "block", objectFit: "cover", filter: "saturate(1.15)" }}
+          unoptimized
+          loading="lazy"
+          placeholder="blur"
+          blurDataURL={BLUR_PLACEHOLDER}
         />
 
         {/* Collected dot */}
@@ -69,84 +110,33 @@ function MasonryCard({
       {/* Metadata — collapses when column count exceeds threshold */}
       <div
         style={{
-          maxHeight: showMeta ? 72 : 0,
+          maxHeight: showMeta ? 100 : 0,
           opacity: showMeta ? 1 : 0,
           overflow: "hidden",
           transition: "max-height 0.32s ease, opacity 0.22s ease",
-          borderBottom: "1px solid #EBEBEB",
         }}
       >
-        <div style={{ padding: "9px 2px 10px" }}>
+        <div style={{ padding: "10px 2px 12px" }}>
           {/* Title */}
           <div
             style={{
-              fontSize: 10,
-              letterSpacing: "-0.04em",
-              fontWeight: 600,
+              fontSize: size.meta,
+              lineHeight: leading.meta,
+              letterSpacing: tracking.normal,
+              fontWeight: weight.medium,
               textTransform: "uppercase",
               color: "#202020",
-              fontFamily: '"Geist", system-ui, sans-serif',
-              marginBottom: 5,
-              lineHeight: 1.2,
+              marginBottom: 6,
             }}
           >
             {box.title}
           </div>
 
-          {/* Two-column meta */}
-          <div style={{ display: "flex", gap: 20 }}>
-            <div>
-              <div
-                style={{
-                  fontSize: 8,
-                  letterSpacing: "0.04em",
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                  color: "#A8A8A8",
-                  fontFamily: '"Geist", system-ui, sans-serif',
-                  marginBottom: 2,
-                }}
-              >
-                Artist
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "-0.03em",
-                  fontWeight: 500,
-                  color: "#202020",
-                  fontFamily: '"Geist", system-ui, sans-serif',
-                }}
-              >
-                {box.artist}
-              </div>
-            </div>
-            <div>
-              <div
-                style={{
-                  fontSize: 8,
-                  letterSpacing: "0.04em",
-                  fontWeight: 500,
-                  textTransform: "uppercase",
-                  color: "#A8A8A8",
-                  fontFamily: '"Geist", system-ui, sans-serif',
-                  marginBottom: 2,
-                }}
-              >
-                Year
-              </div>
-              <div
-                style={{
-                  fontSize: 10,
-                  letterSpacing: "-0.03em",
-                  fontWeight: 500,
-                  color: "#202020",
-                  fontFamily: '"Geist", system-ui, sans-serif',
-                }}
-              >
-                {box.year}
-              </div>
-            </div>
+          {/* Meta */}
+          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+            <CardMeta label="Artist" value={box.artist} />
+            <CardMeta label="Year" value={formatYear(box.year)} />
+            <CardMeta label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
           </div>
         </div>
       </div>
@@ -192,18 +182,18 @@ export default function MasonryView({
   }, [boxes]);
 
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 8 }}>
+    <div style={{ flex: 1, overflowY: "auto", padding: 8, paddingTop: 0 }}>
       <div
         style={{
           columnCount: columns,
-          columnGap: 4,
+          columnGap: 12,
         }}
       >
         {boxes.map((box, i) => (
           <div
             key={box.id}
             ref={(el) => { cardRefs.current[i] = el; }}
-            style={{ breakInside: "avoid", marginBottom: 4 }}
+            style={{ breakInside: "avoid", marginBottom: 12 }}
           >
             <MasonryCard
               box={box}

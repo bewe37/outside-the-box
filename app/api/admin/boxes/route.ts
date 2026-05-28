@@ -18,6 +18,12 @@ function writeBoxes(boxes: unknown[]) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(boxes, null, 2));
 }
 
+// Year is a 4-digit number, or the literal "UNKNOWN".
+function normalizeYear(value: unknown): number | "UNKNOWN" {
+  if (value === "UNKNOWN") return "UNKNOWN";
+  return Number(value) || new Date().getFullYear();
+}
+
 async function checkAuth() {
   const cookieStore = await cookies();
   const token = cookieStore.get(COOKIE_NAME)?.value;
@@ -50,8 +56,9 @@ export async function POST(request: NextRequest) {
     address: body.address || "",
     neighbourhood: body.neighbourhood || "",
     artist: body.artist || "",
-    year: Number(body.year) || new Date().getFullYear(),
+    year: normalizeYear(body.year),
     captured: body.captured || new Date().toLocaleDateString("en-US"),
+    description: typeof body.description === "string" ? body.description.trim() : "",
     images: Array.isArray(body.images) ? body.images : [],
   };
 
@@ -59,6 +66,37 @@ export async function POST(request: NextRequest) {
   writeBoxes(boxes);
 
   return NextResponse.json(newBox, { status: 201 });
+}
+
+export async function PUT(request: NextRequest) {
+  if (!(await checkAuth())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await request.json();
+  const id = Number(body.id);
+  const boxes = readBoxes();
+  const idx = boxes.findIndex((b: { id: number }) => b.id === id);
+  if (idx === -1) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const updated = {
+    ...boxes[idx],
+    title: String(body.title || "").toUpperCase(),
+    address: body.address || "",
+    neighbourhood: body.neighbourhood || "",
+    artist: body.artist || "",
+    year: normalizeYear(body.year),
+    captured: body.captured || boxes[idx].captured,
+    description: typeof body.description === "string" ? body.description.trim() : "",
+    images: Array.isArray(body.images) ? body.images : [],
+  };
+
+  boxes[idx] = updated;
+  writeBoxes(boxes);
+
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(request: NextRequest) {

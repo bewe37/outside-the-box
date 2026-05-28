@@ -2,29 +2,26 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
+import { size, tracking, leading } from "@/lib/typography";
+import { useNav } from "@/app/components/nav-context";
+import { useAuth } from "@/app/components/auth-context";
+import { supabase } from "@/lib/supabase";
 
-export function SiteNav({
-  collectedCount,
-  right,
-  borderBottom = true,
-}: {
-  collectedCount?: number;
-  right?: ReactNode;
-  borderBottom?: boolean;
-}) {
+export function SiteNav() {
   const pathname = usePathname();
-  const [localCount, setLocalCount] = useState(0);
+  const [count, setCount] = useState(0);
+  const { right } = useNav();
+  const { user } = useAuth();
 
   useEffect(() => {
-    if (collectedCount !== undefined) return;
-    try {
-      const s = localStorage.getItem("otb_collected");
-      setLocalCount(s ? JSON.parse(s).length : 0);
-    } catch {}
-  }, [collectedCount]);
-
-  const count = collectedCount ?? localCount;
+    if (!user) { setCount(0); return; }
+    supabase
+      .from("collections")
+      .select("box_id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .then(({ count: c }) => setCount(c ?? 0));
+  }, [user]);
 
   return (
     <div
@@ -32,12 +29,13 @@ export function SiteNav({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        paddingBlock: 14,
-        paddingInline: 16,
+        height: 44,
+        boxSizing: "border-box",
+        paddingInline: 8,
         position: "relative",
         flexShrink: 0,
         background: "#FFFFFF",
-        borderBottom: borderBottom ? "1px solid #E8E8E8" : "none",
+        borderBottom: "1px solid transparent",
       }}
     >
       {/* Wordmark */}
@@ -67,7 +65,7 @@ export function SiteNav({
         </NavLink>
       </div>
 
-      {/* Right slot */}
+      {/* Right slot — injected by the active page */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         {right}
       </div>
@@ -82,19 +80,18 @@ export function NavLink({
 }: {
   href: string;
   active?: boolean;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
     <Link
       href={href}
       style={{
-        fontSize: 11,
-        letterSpacing: "-0.04em",
-        fontWeight: 500,
+        fontSize: size.meta,
+        lineHeight: leading.meta,
+        letterSpacing: tracking.label,
         textTransform: "uppercase",
         color: active ? "#202020" : "#A8A8A8",
         textDecoration: "none",
-        lineHeight: "14px",
       }}
     >
       {children}
@@ -103,8 +100,8 @@ export function NavLink({
 }
 
 const wordmark: React.CSSProperties = {
-  fontSize: 11,
-  letterSpacing: "-0.04em",
+  fontSize: size.meta,
+  letterSpacing: tracking.label,
   fontWeight: 500,
   textTransform: "uppercase",
   color: "#202020",

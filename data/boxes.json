@@ -1,1 +1,404 @@
-[]
+[
+  {
+    "id": 13,
+    "title": "VILLAGE RAINBOW",
+    "address": "484 Church Street, Toronto, Ontario, Canada",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "PUA69",
+    "year": 2024,
+    "captured": "4/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779841152306-9jml93wwjfk.jpg"
+    ]
+  },
+  {
+    "id": 14,
+    "title": "UNKNOWN TITLE",
+    "address": "68 Maitland Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Unknown",
+    "year": 2026,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779841869293-o4x2rtevgus.jpg",
+      "/uploads/1779841869497-xo4obis5s6l.jpg"
+    ]
+  },
+  {
+    "id": 15,
+    "title": "UNKNOWN TITLE",
+    "address": "83 Gloucester Street, Toronto, Ontario",
+    "neighbourhood": "LESLIEVILLE",
+    "artist": "Linda Carter",
+    "year": 2011,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779841970725-3oooliu0jeu.jpg"
+    ]
+  },
+  {
+    "id": 16,
+    "title": "UNKNOWN TITLE",
+    "address": "83 Gloucester Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Linda Carter",
+    "year": 2011,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779842022144-wxqxab6cqig.jpg"
+    ]
+  },
+  {
+    "id": 17,
+    "title": "UNKNOWN TITLE",
+    "address": "100 Gloucester Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Gabrielle Loesch",
+    "year": 2011,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779842119894-dfqlmr3ejnp.jpg",
+      "/uploads/1779842120145-6kd2f3s8ig7.jpg"
+    ]
+  },
+  {
+    "id": 18,
+    "title": "UNKNOWN",
+    "address": "105 Isabella Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Unknown",
+    "year": 2026,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779843288593-a9dkz2v4cn9.jpg",
+      "/uploads/1779843288877-sqp2z86fn9r.jpg",
+      "/uploads/1779843289118-7zhiz3fjp0l.jpg"
+    ]
+  },
+  {
+    "id": 19,
+    "title": "UNKNOWN TITLE",
+    "address": "105 Isabella Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Dan Walsh",
+    "year": 2011,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779843416570-3s1l1n80k12.jpg"
+    ]
+  },
+  {
+    "id": 20,
+    "title": "UNKNOWN TITLE",
+    "address": "59 Isabella Street, Toronto, Ontario",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Heidi Burkhardt",
+    "year": 2011,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779843567678-dairyrt6kb7.jpg",
+      "/uploads/1779843567864-3ybs424d48b.jpg"
+    ]
+  },
+  {
+    "id": 21,
+    "title": "UNKNOWN TITLE",
+    "address": "111 Cumberland St, Toronto, Ontario",
+    "neighbourhood": "YORKVILLE",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779843868009-xlg47vkts4q.jpg"
+    ]
+  },
+  {
+    "id": 22,
+    "title": "UNKNOWN",
+    "address": "98 Yorkville Ave, Toronto, Ontario",
+    "neighbourhood": "YORKVILLE",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779843936058-7f4uu0a23gg.jpg",
+      "/uploads/1779843936258-qt9p8nhfu2.jpg"
+    ]
+  },
+  {
+    "id": 23,
+    "title": "GORDON LIGHTFOOT",
+    "address": "6 Scollard St, Toronto, Ontario",
+    "neighbourhood": "THE ANNEX",
+    "artist": "Adrian Hayles",
+    "year": 2021,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779844098370-gxe4jzs9n5l.jpg"
+    ]
+  },
+  {
+    "id": 24,
+    "title": "DO ANDROIDS DREAM OF ELECTRIC SHEEP?",
+    "address": "4-4 Taddle Creek Road",
+    "neighbourhood": "DISCOVERY DISTRICT",
+    "artist": "Vicky Bilbily",
+    "year": 2019,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779844288985-jmwr654qy8o.jpg",
+      "/uploads/1779844289225-et5uuyfkcqm.jpg"
+    ]
+  },
+  {
+    "id": 25,
+    "title": "UNKNOWN TITLE",
+    "address": "211 College St, Toronto, Ontario",
+    "neighbourhood": "DISCOVERY DISTRICT",
+    "artist": "Bareket Kezwer",
+    "year": 2019,
+    "captured": "5/26/26",
+    "description": "Together, we can build inclusive, multilingual neighbourhoods that celebrate diversity. Smile at your neighbours, connect with strangers. Open your hearts and embrace your community. By helping other people find their light, we can all shine together.",
+    "images": [
+      "/uploads/1779844404006-10m5p9313od.jpg",
+      "/uploads/1779844404208-jonq1o0l8of.jpg",
+      "/uploads/1779844404378-6ui9vh8fn6b.jpg"
+    ]
+  },
+  {
+    "id": 26,
+    "title": "A BIRD IS SINGING IN MY GARDEN",
+    "address": "219 College St, Toronto, Ontario",
+    "neighbourhood": "DISCOVERY DISTRICT",
+    "artist": "Aitak Sorahitalab",
+    "year": 2019,
+    "captured": "5/26/26",
+    "description": "A Bird is Singing in my Garden is the title of Aitak Sorahitalab's mural on College Street in the heart of the University of Toronto. The mural was inspired by Persian carpet designs",
+    "images": [
+      "/uploads/1779844500480-12ihue2ad4ro.jpg",
+      "/uploads/1779844500667-4cn579wakgq.jpg"
+    ]
+  },
+  {
+    "id": 27,
+    "title": "UNKNOWN TITLE",
+    "address": "219 College St, Toronto, Ontario",
+    "neighbourhood": "DISCOVERY DISTRICT",
+    "artist": "Bee Fawn",
+    "year": 2019,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "/uploads/1779844546939-qr06kz1goo.jpg",
+      "/uploads/1779844547150-0blbo6o22pqv.jpg"
+    ]
+  },
+  {
+    "id": 28,
+    "title": "THE DANCE",
+    "address": "230 College St, Toronto, Ontario",
+    "neighbourhood": "DISCOVERY DISTRICT",
+    "artist": "Keight MacLean",
+    "year": 2017,
+    "captured": "5/26/26",
+    "description": "\"The Dance\" celebrates Toronto's history of diversity as community as a literal dance, everyone holding hands in a continuous circle around the box, jumping and dancing barefoot and smiling and laughing. Bright fluorescent splashes of colour weave in and out of the dancing group to further highlight how people come together in Toronto to form a unique tapestry.",
+    "images": [
+      "/uploads/1779844644807-mo3d4oaxv9.jpg",
+      "/uploads/1779844644984-waebyrkkxmb.jpg"
+    ]
+  },
+  {
+    "id": 29,
+    "title": "DANCER",
+    "address": "542 College St",
+    "neighbourhood": "LITTLE ITALY",
+    "artist": "Louise Reimer",
+    "year": 2017,
+    "captured": "5/26/26",
+    "description": "The design is an homage to dancer. In our current world, where most people work at highly sedentary jobs, it is important to promote movement and an active lifestyle. Dance is not only exercise, but expressive, non-competitive, and joyful. All cultures have some form of dance, which brings people together and allows for joy and expression. Contemporary dance is the result of a lot of work done by pioneering women, and especially queer people, and people of colour, which deserves to be honoured. These groups of people are all cultural producers in Toronto who still struggle for space and recognition within the art world.",
+    "images": [
+      "/uploads/1779844770039-tnff7hhjqec.jpg",
+      "/uploads/1779844770102-v32gcuda1f.jpg"
+    ]
+  },
+  {
+    "id": 30,
+    "title": "UNKNOWN TITLE",
+    "address": "542 College Street, Toronto, Ontario",
+    "neighbourhood": "LITTLE ITALY",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "/uploads/1779896450282-ql52o0hfwqm.jpg"
+    ]
+  },
+  {
+    "id": 31,
+    "title": "UNKNOWN TITLE",
+    "address": "38 Margueretta St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Katika Marczell",
+    "year": 2021,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "/uploads/1779896649745-4k4u68yzwsi.jpg",
+      "/uploads/1779896650461-0as4hex4bov6.jpg",
+      "/uploads/1779896651033-ah474g0pjs.jpg"
+    ]
+  },
+  {
+    "id": 32,
+    "title": "UNKNOWN TITLE",
+    "address": "330 Brock Ave",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Erin McCluskey",
+    "year": 2021,
+    "captured": "5/27/26",
+    "description": "",
+    "images": [
+      "/uploads/1779896893289-9p3sb1nw7m6.jpg",
+      "/uploads/1779896894360-rcla5xucvjk.jpg",
+      "/uploads/1779896895613-th88wa8eh4.jpg"
+    ]
+  },
+  {
+    "id": 33,
+    "title": "DAYDREAM",
+    "address": "1026 College St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Hayley Alcott",
+    "year": 2024,
+    "captured": "5/27/26",
+    "description": "",
+    "images": [
+      "/uploads/1779898268146-yacy2nbvj6q.jpg",
+      "/uploads/1779898268908-ao9wdz1mo7n.jpg"
+    ]
+  },
+  {
+    "id": 34,
+    "title": "UNKNOWN TITLE",
+    "address": "227 Roxton Rd, Toronto, Ontario",
+    "neighbourhood": "LITTLE ITALY",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "5/27/26",
+    "description": "",
+    "images": [
+      "/uploads/1779898384009-8qbnk6p8epl.jpg"
+    ]
+  },
+  {
+    "id": 35,
+    "title": "UNKNOWN TITLE",
+    "address": "938 College St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Emily May Rose",
+    "year": 2016,
+    "captured": "5/27/26",
+    "description": "The traffic box is transformed into a historic Toronto low-rise apartment building. Throughout the windows and fire escapes, I have a gang of everyone's favourite Toronto mascot - raccoons, of course - climbing around and causing mischief, as they do.",
+    "images": [
+      "/uploads/1779898535433-ob9t6hnh8f.jpg",
+      "/uploads/1779898536247-pssbgo5xilp.jpg",
+      "/uploads/1779898536953-lcd08tq9zc.jpg"
+    ]
+  },
+  {
+    "id": 36,
+    "title": "UNKNOWN TITLE",
+    "address": "1068 College St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Hyedie Hashimoto",
+    "year": 2024,
+    "captured": "5/27/26",
+    "description": "On a micro-level we are connected as humans through our cells. On a macro-level we are connected as humans through our history in the universe. These 'cosmic cells' are a respresentation of the micro and macro connectedness we have a humans.",
+    "images": [
+      "/uploads/1779898672637-l4ddzzqtwq9.jpg",
+      "/uploads/1779898674030-57jvs23tzre.jpg"
+    ]
+  },
+  {
+    "id": 37,
+    "title": "UNKNOWN TITLE",
+    "address": "336 Glandstone Ave, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Natalie Very B.",
+    "year": 2021,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "/uploads/1779898976991-wswo1bgc9r8.jpg",
+      "/uploads/1779898977896-jhjpxe9j28b.jpg",
+      "/uploads/1779898978770-l4qs3khyg2.jpg"
+    ]
+  },
+  {
+    "id": 38,
+    "title": "UNKNOWN TITLE",
+    "address": "1232 College St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Jenn Kitagawa",
+    "year": 2021,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "/uploads/1779899028575-zxn9ne9zm69.jpg"
+    ]
+  },
+  {
+    "id": 39,
+    "title": "UNKNOWN TITLE",
+    "address": "47 Margueretta St, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Elise Conlin",
+    "year": 2021,
+    "captured": "5/27/26",
+    "description": "",
+    "images": [
+      "/uploads/1779899081763-an1rjghzj1.jpg"
+    ]
+  },
+  {
+    "id": 40,
+    "title": "UNKNOWN TITLE",
+    "address": "1745 Dundas St W, Toronto, Ontario",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Laura Bydlowska",
+    "year": "UNKNOWN",
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "/uploads/1779899220178-asmsgxpl6jq.jpg",
+      "/uploads/1779899220880-9o74tnx08lh.jpg"
+    ]
+  },
+  {
+    "id": 41,
+    "title": "UNKNOWN TITLE",
+    "address": "181 Bay St, Toronto, Ontario",
+    "neighbourhood": "OLD TORONTO",
+    "artist": "Leeay Aikawa",
+    "year": 2018,
+    "captured": "5/24/26",
+    "description": "",
+    "images": [
+      "/uploads/1779899844531-z9rc8e52beq.jpg",
+      "/uploads/1779899845448-elajlt15d8b.jpg"
+    ]
+  }
+]

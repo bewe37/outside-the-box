@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import { NEIGHBOURHOODS, type Neighbourhood } from "@/lib/data";
+import { NEIGHBOURHOODS, formatNeighbourhood, type Neighbourhood } from "@/lib/data";
+import { size, tracking, leading } from "@/lib/typography";
 
 interface DynamicBox {
   id: number;
@@ -10,17 +11,18 @@ interface DynamicBox {
   address: string;
   neighbourhood: Neighbourhood;
   artist: string;
-  year: number;
+  year: number | "UNKNOWN";
   captured: string;
+  description?: string;
   images?: string[];
 }
 
 const LABEL: React.CSSProperties = {
-  fontSize: 9,
-  letterSpacing: "0.1em",
+  fontSize: size.caption,
+  lineHeight: leading.caption,
+  letterSpacing: tracking.loose,
   textTransform: "uppercase",
   color: "#A8A8A8",
-  fontWeight: 500,
   marginBottom: 6,
   display: "block",
 };
@@ -30,7 +32,8 @@ const INPUT: React.CSSProperties = {
   border: "1px solid #E4E4E4",
   borderRadius: 4,
   padding: "8px 10px",
-  fontSize: 12,
+  fontSize: size.meta,
+  letterSpacing: tracking.normal,
   fontFamily: "inherit",
   color: "#202020",
   background: "#FAFAFA",
@@ -46,13 +49,58 @@ const emptyForm = {
   address: "",
   neighbourhood: "LESLIEVILLE" as Neighbourhood,
   artist: "",
-  year: today.getFullYear(),
+  year: today.getFullYear() as number | "UNKNOWN",
   captured: defaultCaptured,
+  description: "",
 };
 
 interface PendingImage {
   file: File;
   preview: string;
+}
+
+// Upload one file, returns its stored path (or null on failure).
+async function uploadFile(file: File): Promise<string | null> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch("/api/admin/upload", { method: "POST", body: fd });
+  if (!r.ok) return null;
+  const d = await r.json();
+  return d.path as string;
+}
+
+// Year input with an "Unknown" toggle. Unchecked = number; checked = "UNKNOWN".
+function YearField({
+  value,
+  onChange,
+}: {
+  value: number | "UNKNOWN";
+  onChange: (value: number | "UNKNOWN") => void;
+}) {
+  const isUnknown = value === "UNKNOWN";
+  return (
+    <div>
+      <label style={LABEL}>Year</label>
+      <input
+        style={{ ...INPUT, opacity: isUnknown ? 0.4 : 1 }}
+        type="number"
+        value={isUnknown ? "" : value}
+        disabled={isUnknown}
+        onChange={(e) => onChange(Number(e.target.value) || new Date().getFullYear())}
+        min={2000}
+        max={2099}
+      />
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 10, color: "#A8A8A8", letterSpacing: "0.04em", textTransform: "uppercase", cursor: "pointer", userSelect: "none" }}>
+        <input
+          type="checkbox"
+          checked={isUnknown}
+          onChange={(e) => onChange(e.target.checked ? "UNKNOWN" : new Date().getFullYear())}
+          style={{ margin: 0, cursor: "pointer" }}
+        />
+        Unknown
+      </label>
+    </div>
+  );
 }
 
 export default function AdminPage() {
@@ -62,6 +110,9 @@ export default function AdminPage() {
   const [logging, setLogging] = useState(false);
 
   const [boxes, setBoxes] = useState<DynamicBox[]>([]);
+  const [customHoods, setCustomHoods] = useState<string[]>([]);
+  const [newHood, setNewHood] = useState("");
+  const [hoodError, setHoodError] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [pending, setPending] = useState<PendingImage[]>([]);
   const [isDragging, setIsDragging] = useState(false);
@@ -79,12 +130,52 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (authed) loadBoxes();
+    if (authed) { loadBoxes(); loadHoods(); }
   }, [authed]);
 
   async function loadBoxes() {
     const r = await fetch("/api/admin/boxes");
     if (r.ok) setBoxes(await r.json());
+  }
+
+  async function loadHoods() {
+    const r = await fetch("/api/admin/neighbourhoods");
+    if (r.ok) setCustomHoods(await r.json());
+  }
+
+  // Built-in defaults plus admin-added neighbourhoods, for the form dropdown.
+  const allHoods = [...NEIGHBOURHOODS, ...customHoods];
+
+  async function addHood(e: React.FormEvent) {
+    e.preventDefault();
+    setHoodError("");
+    const name = newHood.trim().toUpperCase();
+    if (!name) return;
+    const r = await fetch("/api/admin/neighbourhoods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (r.ok) {
+      setCustomHoods(await r.json());
+      setNewHood("");
+    } else {
+      const d = await r.json().catch(() => ({}));
+      setHoodError(d.error || "Could not add.");
+    }
+  }
+
+  async function removeHood(name: string) {
+    const r = await fetch("/api/admin/neighbourhoods", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (r.ok) {
+      setCustomHoods(await r.json());
+      // If the form was set to the removed one, reset to the first built-in.
+      setForm((f) => (f.neighbourhood === name ? { ...f, neighbourhood: NEIGHBOURHOODS[0] } : f));
+    }
   }
 
   async function login(e: React.FormEvent) {
@@ -145,12 +236,9 @@ export default function AdminPage() {
 
     const uploadedPaths: string[] = [];
     for (const item of pending) {
-      const fd = new FormData();
-      fd.append("file", item.file);
-      const r = await fetch("/api/admin/upload", { method: "POST", body: fd });
-      if (!r.ok) { setError("Image upload failed."); setSubmitting(false); return; }
-      const d = await r.json();
-      uploadedPaths.push(d.path);
+      const path = await uploadFile(item.file);
+      if (!path) { setError("Image upload failed."); setSubmitting(false); return; }
+      uploadedPaths.push(path);
     }
 
     const r = await fetch("/api/admin/boxes", {
@@ -332,7 +420,7 @@ export default function AdminPage() {
               <div>
                 <label style={LABEL}>Neighbourhood</label>
                 <select style={{ ...INPUT, appearance: "none", cursor: "pointer" }} value={form.neighbourhood} onChange={(e) => setForm((f) => ({ ...f, neighbourhood: e.target.value as Neighbourhood }))}>
-                  {NEIGHBOURHOODS.map((n) => <option key={n} value={n}>{n}</option>)}
+                  {allHoods.map((n) => <option key={n} value={n}>{formatNeighbourhood(n)}</option>)}
                 </select>
               </div>
               <div>
@@ -340,16 +428,25 @@ export default function AdminPage() {
                 <input style={INPUT} value={form.artist} onChange={(e) => setForm((f) => ({ ...f, artist: e.target.value }))} placeholder="e.g. Marcus Webb" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <label style={LABEL}>Year</label>
-                  <input style={INPUT} type="number" value={form.year} onChange={(e) => setForm((f) => ({ ...f, year: Number(e.target.value) }))} min={2000} max={2099} />
-                </div>
+                <YearField value={form.year} onChange={(year) => setForm((f) => ({ ...f, year }))} />
                 <div>
                   <label style={LABEL}>Captured</label>
                   <input style={INPUT} value={form.captured} onChange={(e) => setForm((f) => ({ ...f, captured: e.target.value }))} placeholder="M/D/YY" />
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Description — full width */}
+          <div style={{ marginTop: 28 }}>
+            <label style={LABEL}>Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              placeholder="Describe the artwork — subject, style, story behind it…"
+              rows={4}
+              style={{ ...INPUT, resize: "vertical", lineHeight: 1.5 }}
+            />
           </div>
 
           <div style={{ marginTop: 24, display: "flex", alignItems: "center", gap: 16 }}>
@@ -361,6 +458,53 @@ export default function AdminPage() {
           </div>
         </form>
 
+        {/* Manage neighbourhoods */}
+        <div style={{ marginTop: 56 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "-0.03em", marginBottom: 4 }}>Neighbourhoods</div>
+          <div style={{ fontSize: 9, letterSpacing: "0.04em", textTransform: "uppercase", color: "#A8A8A8", marginBottom: 16 }}>
+            Built-in plus any you add. New ones appear in the dropdown above and the gallery filter.
+          </div>
+
+          {/* Add row */}
+          <form onSubmit={addHood} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 16, maxWidth: 420 }}>
+            <input
+              style={{ ...INPUT, textTransform: "uppercase" }}
+              value={newHood}
+              onChange={(e) => { setNewHood(e.target.value); setHoodError(""); }}
+              placeholder="e.g. LIBERTY VILLAGE"
+            />
+            <button
+              type="submit"
+              disabled={!newHood.trim()}
+              style={{ flexShrink: 0, padding: "8px 16px", background: "#202020", color: "#fff", border: "none", borderRadius: 4, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: newHood.trim() ? "pointer" : "not-allowed", opacity: newHood.trim() ? 1 : 0.5 }}
+            >
+              Add
+            </button>
+            {hoodError && <span style={{ fontSize: 10, color: "#E55" }}>{hoodError}</span>}
+          </form>
+
+          {/* Chips */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {NEIGHBOURHOODS.map((n) => (
+              <span key={n} style={{ display: "inline-flex", alignItems: "center", padding: "5px 10px", border: "1px solid #E4E4E4", borderRadius: 999, fontSize: 10, letterSpacing: "0.04em", color: "#888", background: "#FAFAFA" }}>
+                {formatNeighbourhood(n)}
+              </span>
+            ))}
+            {customHoods.map((n) => (
+              <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 6px 5px 10px", border: "1px solid #D4D4D4", borderRadius: 999, fontSize: 10, letterSpacing: "0.04em", color: "#202020", background: "#fff" }}>
+                {formatNeighbourhood(n)}
+                <button
+                  onClick={() => removeHood(n)}
+                  aria-label={`Remove ${formatNeighbourhood(n)}`}
+                  style={{ width: 16, height: 16, borderRadius: "50%", border: "none", background: "#EEE", color: "#666", cursor: "pointer", fontSize: 11, lineHeight: "16px", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "inherit", padding: 0 }}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* Existing dynamic boxes */}
         {boxes.length > 0 && (
           <div style={{ marginTop: 56 }}>
@@ -369,33 +513,13 @@ export default function AdminPage() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16 }}>
               {boxes.map((box) => (
-                <div key={box.id} style={{ background: "#fff", border: "1px solid #E8E8E8", borderRadius: 6, overflow: "hidden" }}>
-                  {/* Photo strip */}
-                  {box.images && box.images.length > 0 ? (
-                    <div style={{ display: "flex", gap: 1, background: "#1A1A1A" }}>
-                      {box.images.slice(0, 3).map((src, i) => (
-                        <div key={i} style={{ flex: 1, position: "relative", paddingBottom: "100%", background: "#111" }}>
-                          <Image src={src} alt="" fill style={{ objectFit: "contain" }} unoptimized />
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ paddingBottom: "60%", background: "#F0F0F0", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <span style={{ fontSize: 9, color: "#C0C0C0", letterSpacing: "0.04em", textTransform: "uppercase", position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }}>No photos</span>
-                    </div>
-                  )}
-                  <div style={{ padding: "10px 12px 12px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 2 }}>{box.title}</div>
-                    <div style={{ fontSize: 9, color: "#A8A8A8", marginBottom: 2 }}>{box.artist}</div>
-                    <div style={{ fontSize: 8, color: "#C0C0C0", letterSpacing: "0.04em", textTransform: "uppercase", marginBottom: 10 }}>{box.neighbourhood}</div>
-                    {box.images && box.images.length > 0 && (
-                      <div style={{ fontSize: 8, color: "#C0C0C0", marginBottom: 8 }}>{box.images.length} photo{box.images.length !== 1 ? "s" : ""}</div>
-                    )}
-                    <button onClick={() => deleteBox(box.id)} style={{ background: "none", border: "1px solid #E8E8E8", borderRadius: 3, padding: "4px 10px", cursor: "pointer", fontSize: 8, letterSpacing: "0.06em", textTransform: "uppercase", color: "#A8A8A8", fontFamily: "inherit" }}>
-                      Delete
-                    </button>
-                  </div>
-                </div>
+                <BoxCard
+                  key={box.id}
+                  box={box}
+                  neighbourhoods={allHoods}
+                  onDelete={() => deleteBox(box.id)}
+                  onSaved={loadBoxes}
+                />
               ))}
             </div>
           </div>
@@ -404,3 +528,248 @@ export default function AdminPage() {
     </div>
   );
 }
+
+// ── Box card: view + inline edit ────────────────────────────────────────────
+function BoxCard({
+  box,
+  neighbourhoods,
+  onDelete,
+  onSaved,
+}: {
+  box: DynamicBox;
+  neighbourhoods: Neighbourhood[];
+  onDelete: () => void;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const [draft, setDraft] = useState({
+    title: box.title,
+    address: box.address,
+    neighbourhood: box.neighbourhood,
+    artist: box.artist,
+    year: box.year,
+    captured: box.captured,
+    description: box.description ?? "",
+  });
+  // Existing uploaded paths kept on the box, plus newly added (not-yet-uploaded) files.
+  const [keptImages, setKeptImages] = useState<string[]>(box.images ?? []);
+  const [pending, setPending] = useState<PendingImage[]>([]);
+  const editFileRef = useRef<HTMLInputElement>(null);
+
+  function startEdit() {
+    setDraft({
+      title: box.title,
+      address: box.address,
+      neighbourhood: box.neighbourhood,
+      artist: box.artist,
+      year: box.year,
+      captured: box.captured,
+      description: box.description ?? "",
+    });
+    setKeptImages(box.images ?? []);
+    setPending([]);
+    setError("");
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    pending.forEach((p) => URL.revokeObjectURL(p.preview));
+    setPending([]);
+    setEditing(false);
+  }
+
+  function addFiles(files: FileList | File[]) {
+    const next = Array.from(files)
+      .filter((f) => f.type.startsWith("image/"))
+      .map((file) => ({ file, preview: URL.createObjectURL(file) }));
+    setPending((prev) => [...prev, ...next]);
+  }
+
+  function removeKept(src: string) {
+    setKeptImages((prev) => prev.filter((s) => s !== src));
+  }
+
+  function removePending(idx: number) {
+    setPending((prev) => {
+      URL.revokeObjectURL(prev[idx].preview);
+      return prev.filter((_, i) => i !== idx);
+    });
+  }
+
+  async function save() {
+    setError("");
+    if (!draft.title.trim()) { setError("Title is required."); return; }
+    if (!draft.address.trim()) { setError("Address is required."); return; }
+    setSaving(true);
+
+    const uploaded: string[] = [];
+    for (const item of pending) {
+      const path = await uploadFile(item.file);
+      if (!path) { setError("Image upload failed."); setSaving(false); return; }
+      uploaded.push(path);
+    }
+
+    const r = await fetch("/api/admin/boxes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...draft, id: box.id, images: [...keptImages, ...uploaded] }),
+    });
+    setSaving(false);
+
+    if (r.ok) {
+      pending.forEach((p) => URL.revokeObjectURL(p.preview));
+      setPending([]);
+      setEditing(false);
+      onSaved();
+    } else {
+      setError("Failed to save.");
+    }
+  }
+
+  // ── View mode ──
+  if (!editing) {
+    return (
+      <div style={{ background: "#fff", border: "1px solid #E8E8E8", borderRadius: 6, overflow: "hidden" }}>
+        {box.images && box.images.length > 0 ? (
+          <div style={{ display: "flex", gap: 1, background: "#1A1A1A" }}>
+            {box.images.slice(0, 3).map((src, i) => (
+              <div key={i} style={{ flex: 1, position: "relative", paddingBottom: "100%", background: "#111" }}>
+                <Image src={src} alt="" fill style={{ objectFit: "contain" }} unoptimized />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ paddingBottom: "60%", background: "#F0F0F0", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ fontSize: 9, color: "#C0C0C0", letterSpacing: "0.04em", textTransform: "uppercase", position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)" }}>No photos</span>
+          </div>
+        )}
+        <div style={{ padding: "10px 12px 12px" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "-0.02em", marginBottom: 2 }}>{box.title}</div>
+          <div style={{ fontSize: 9, color: "#A8A8A8", marginBottom: 2 }}>{box.artist}</div>
+          <div style={{ fontSize: 9, color: "#C0C0C0", letterSpacing: "-0.02em", marginBottom: 10 }}>{formatNeighbourhood(box.neighbourhood)}</div>
+          {box.images && box.images.length > 0 && (
+            <div style={{ fontSize: 8, color: "#C0C0C0", marginBottom: 8 }}>{box.images.length} photo{box.images.length !== 1 ? "s" : ""}</div>
+          )}
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={startEdit} style={{ background: "none", border: "1px solid #E8E8E8", borderRadius: 3, padding: "4px 10px", cursor: "pointer", fontSize: 8, letterSpacing: "0.06em", textTransform: "uppercase", color: "#202020", fontFamily: "inherit" }}>
+              Edit
+            </button>
+            <button onClick={onDelete} style={{ background: "none", border: "1px solid #E8E8E8", borderRadius: 3, padding: "4px 10px", cursor: "pointer", fontSize: 8, letterSpacing: "0.06em", textTransform: "uppercase", color: "#A8A8A8", fontFamily: "inherit" }}>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Edit mode (spans full grid width) ──
+  return (
+    <div style={{ gridColumn: "1 / -1", background: "#fff", border: "1px solid #D4D4D4", borderRadius: 6, padding: 16 }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: "#202020", marginBottom: 16 }}>
+        Editing box #{box.id}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, alignItems: "start" }}>
+        {/* Photos */}
+        <div>
+          <label style={LABEL}>Photos</label>
+          <div
+            onClick={() => editFileRef.current?.click()}
+            style={{ border: "1.5px dashed #D4D4D4", borderRadius: 6, background: "#FAFAFA", padding: 14, textAlign: "center", cursor: "pointer", marginBottom: 10 }}
+          >
+            <span style={{ fontSize: 9, letterSpacing: "0.06em", textTransform: "uppercase", color: "#B8B8B8" }}>Click to add photos</span>
+          </div>
+          <input ref={editFileRef} type="file" accept="image/*" multiple onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = ""; }} style={{ display: "none" }} />
+
+          {(keptImages.length > 0 || pending.length > 0) && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))", gap: 8 }}>
+              {keptImages.map((src) => (
+                <div key={src} style={{ position: "relative", borderRadius: 4, overflow: "hidden", background: "#1A1A1A", paddingBottom: "75%" }}>
+                  <Image src={src} alt="" fill style={{ objectFit: "contain" }} unoptimized />
+                  <button type="button" onClick={() => removeKept(src)} aria-label="Remove photo" style={thumbX}>×</button>
+                </div>
+              ))}
+              {pending.map((item, idx) => (
+                <div key={idx} style={{ position: "relative", borderRadius: 4, overflow: "hidden", background: "#1A1A1A", paddingBottom: "75%" }}>
+                  <Image src={item.preview} alt="" fill style={{ objectFit: "contain" }} unoptimized />
+                  <button type="button" onClick={() => removePending(idx)} aria-label="Remove photo" style={thumbX}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Fields */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div>
+            <label style={LABEL}>Title</label>
+            <input style={INPUT} value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} />
+          </div>
+          <div>
+            <label style={LABEL}>Address</label>
+            <input style={INPUT} value={draft.address} onChange={(e) => setDraft((d) => ({ ...d, address: e.target.value }))} />
+          </div>
+          <div>
+            <label style={LABEL}>Neighbourhood</label>
+            <select style={{ ...INPUT, appearance: "none", cursor: "pointer" }} value={draft.neighbourhood} onChange={(e) => setDraft((d) => ({ ...d, neighbourhood: e.target.value }))}>
+              {/* Include the box's current value even if it's no longer in the list. */}
+              {(neighbourhoods.includes(draft.neighbourhood) ? neighbourhoods : [draft.neighbourhood, ...neighbourhoods]).map((n) => (
+                <option key={n} value={n}>{formatNeighbourhood(n)}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={LABEL}>Artist</label>
+            <input style={INPUT} value={draft.artist} onChange={(e) => setDraft((d) => ({ ...d, artist: e.target.value }))} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <YearField value={draft.year} onChange={(year) => setDraft((d) => ({ ...d, year }))} />
+            <div>
+              <label style={LABEL}>Captured</label>
+              <input style={INPUT} value={draft.captured} onChange={(e) => setDraft((d) => ({ ...d, captured: e.target.value }))} placeholder="M/D/YY" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 16 }}>
+        <label style={LABEL}>Description</label>
+        <textarea value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} rows={3} style={{ ...INPUT, resize: "vertical", lineHeight: 1.5 }} />
+      </div>
+
+      <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={save} disabled={saving} style={{ padding: "8px 20px", background: "#202020", color: "#fff", border: "none", borderRadius: 4, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", fontFamily: "inherit", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button onClick={cancelEdit} disabled={saving} style={{ padding: "8px 16px", background: "none", border: "1px solid #E4E4E4", borderRadius: 4, fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#A8A8A8", fontFamily: "inherit", cursor: "pointer" }}>
+          Cancel
+        </button>
+        {error && <span style={{ fontSize: 10, color: "#E55" }}>{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+const thumbX: React.CSSProperties = {
+  position: "absolute",
+  top: 4,
+  right: 4,
+  width: 18,
+  height: 18,
+  borderRadius: "50%",
+  background: "rgba(0,0,0,0.55)",
+  border: "none",
+  color: "#fff",
+  fontSize: 11,
+  lineHeight: "18px",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontFamily: "inherit",
+  padding: 0,
+};

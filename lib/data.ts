@@ -4,19 +4,37 @@ export interface Box {
   address: string;
   neighbourhood: Neighbourhood;
   artist: string;
-  year: number;
+  year: number | "UNKNOWN";
   captured: string;
-  images?: string[]; // uploaded image paths (any orientation), overrides picsum placeholder
+  description?: string; // short artwork description shown in the detail panel
+  images?: string[]; // uploaded image paths (any orientation); the gallery only shows boxes that have at least one
+  lat?: number;
+  lng?: number;
 }
 
-export type Neighbourhood =
-  | "LESLIEVILLE"
-  | "PARKDALE"
-  | "KENSINGTON"
-  | "TRINITY BELLWOODS"
-  | "RIVERSIDE"
-  | "CORK TOWN"
-  | "THE ANNEX";
+// Neighbourhood names are free-form strings: the built-in set below ships with
+// stamp graphics, and admins can add more at runtime (text-only, no stamp).
+export type Neighbourhood = string;
+
+// Display helper: "TRINITY BELLWOODS" -> "Trinity Bellwoods", "CHURCH-WELLESLEY" -> "Church-Wellesley".
+// Storage stays as-is so existing data needs no migration; only the rendered form changes.
+export function formatNeighbourhood(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/(^|[\s-])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+// Display helper for Box.year: numeric years pass through; "UNKNOWN" becomes "Unknown".
+export function formatYear(value: number | "UNKNOWN"): string {
+  return value === "UNKNOWN" ? "Unknown" : String(value);
+}
+
+// Display helper for Box.address: every box is in Toronto, so the city/province
+// tail is noise. Trim trailing ", Toronto, Ontario(, Canada)?" — case-insensitive.
+// Storage stays as-is; only the rendered form changes.
+export function formatAddress(value: string): string {
+  return value.replace(/,\s*Toronto(,\s*Ontario)?(,\s*Canada)?\s*$/i, "").trim();
+}
 
 export const NEIGHBOURHOODS: Neighbourhood[] = [
   "LESLIEVILLE",
@@ -37,6 +55,9 @@ export const boxes: Box[] = [
     artist: "Marcus Webb",
     year: 2021,
     captured: "3/14/26",
+    description:
+      "A weathered upright piano rendered in muted greys, keys spilling into the street like sheet music caught in the wind — a nod to the buskers who once worked this corner.",
+    lat: 43.6634, lng: -79.3398,
   },
   {
     id: 2,
@@ -46,6 +67,9 @@ export const boxes: Box[] = [
     artist: "Yuki Tanaka",
     year: 2022,
     captured: "4/2/26",
+    description:
+      "Hand-painted peonies and wild ferns wrap the box in overlapping layers, the palette shifting from dawn pink to deep dusk as you walk around it.",
+    lat: 43.6601, lng: -79.3676,
   },
   {
     id: 3,
@@ -55,6 +79,7 @@ export const boxes: Box[] = [
     artist: "Jae-won Oh",
     year: 2022,
     captured: "11/3/26",
+    lat: 43.6442, lng: -79.4244,
   },
   {
     id: 4,
@@ -64,6 +89,7 @@ export const boxes: Box[] = [
     artist: "Tomás Rivera",
     year: 2020,
     captured: "1/19/26",
+    lat: 43.6467, lng: -79.4204,
   },
   {
     id: 5,
@@ -73,6 +99,7 @@ export const boxes: Box[] = [
     artist: "Amara Diallo",
     year: 2021,
     captured: "2/7/26",
+    lat: 43.6622, lng: -79.3732,
   },
   {
     id: 6,
@@ -82,6 +109,7 @@ export const boxes: Box[] = [
     artist: "Priya Sharma",
     year: 2023,
     captured: "5/11/26",
+    lat: 43.6700, lng: -79.3871,
   },
   {
     id: 7,
@@ -91,6 +119,7 @@ export const boxes: Box[] = [
     artist: "Lena Novak",
     year: 2022,
     captured: "6/3/26",
+    lat: 43.6389, lng: -79.4279,
   },
   {
     id: 8,
@@ -100,6 +129,7 @@ export const boxes: Box[] = [
     artist: "James Wu",
     year: 2020,
     captured: "7/22/26",
+    lat: 43.6543, lng: -79.4005,
   },
   {
     id: 9,
@@ -109,6 +139,7 @@ export const boxes: Box[] = [
     artist: "Sofia Andersen",
     year: 2023,
     captured: "8/15/26",
+    lat: 43.6549, lng: -79.4021,
   },
   {
     id: 10,
@@ -118,6 +149,7 @@ export const boxes: Box[] = [
     artist: "Nia Thompson",
     year: 2023,
     captured: "9/4/26",
+    lat: 43.6618, lng: -79.3531,
   },
   {
     id: 11,
@@ -127,6 +159,7 @@ export const boxes: Box[] = [
     artist: "Kenji Mori",
     year: 2022,
     captured: "10/30/26",
+    lat: 43.6516, lng: -79.3672,
   },
   {
     id: 12,
@@ -136,5 +169,6 @@ export const boxes: Box[] = [
     artist: "Eli Goldberg",
     year: 2021,
     captured: "12/1/26",
+    lat: 43.6657, lng: -79.4022,
   },
 ];

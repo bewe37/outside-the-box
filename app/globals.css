@@ -47,3 +47,22 @@ input[type="range"].col-slider::-moz-range-thumb {
   border: none;
   cursor: pointer;
 }
+
+/* Thin custom scrollbar for the lightbox photo strip. */
+.thumb-strip::-webkit-scrollbar {
+  height: 4px;
+}
+.thumb-strip::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thumb-strip::-webkit-scrollbar-thumb {
+  background: #D4D4D4;
+  border-radius: 2px;
+}
+.thumb-strip::-webkit-scrollbar-thumb:hover {
+  background: #B0B0B0;
+}
+.thumb-strip {
+  scrollbar-width: thin;
+  scrollbar-color: #D4D4D4 transparent;
+}
