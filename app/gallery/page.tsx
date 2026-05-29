@@ -441,7 +441,7 @@ function IndexRow({
       style={{
         display: "flex",
         alignItems: "center",
-        paddingBlock: 8,
+        paddingBlock: 12,
         paddingInline: 0,
         background: "none",
         border: "none",
@@ -576,11 +576,11 @@ function IndexRow({
             className="index-thumb"
             style={{
               display: "none",
-              width: 80,
-              height: 80,
+              width: 72,
+              height: 72,
               flexShrink: 0,
               overflow: "hidden",
-              marginRight: 16,
+              marginLeft: 16,
             }}
           >
             <Image

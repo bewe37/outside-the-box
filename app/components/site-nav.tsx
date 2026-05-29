@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { size, tracking, leading } from "@/lib/typography";
 import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
@@ -83,7 +84,19 @@ export function SiteNav() {
 
       {/* Right slot — desktop: right edge; mobile: center */}
       <div className="nav-right-slot" style={{ color: "#202020" }}>
-        {right}
+        <AnimatePresence mode="wait">
+          {right && (
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+            >
+              {right}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
