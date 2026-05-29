@@ -5,6 +5,29 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { use } from "react";
 import { useRouter } from "next/navigation";
+
+function ArrowLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: size.caption, letterSpacing: tracking.label,
+        textTransform: "uppercase", color: "#202020",
+        textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4,
+      }}
+    >
+      {children}
+      <span style={{
+        display: "inline-block",
+        transform: hovered ? "translate(2px, -2px)" : "translate(0, 0)",
+        transition: "transform 0.15s ease",
+      }}>→</span>
+    </Link>
+  );
+}
 import { type Box } from "@/lib/data";
 import { size, tracking } from "@/lib/typography";
 import { useAuth } from "@/app/components/auth-context";
@@ -99,15 +122,9 @@ export default function PublicCollectionPage({ params }: { params: Promise<{ use
         <span style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
           {username}'s collection
         </span>
-        {user ? (
-          <Link href="/collection" style={{ fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2 }}>
-            Go to yours →
-          </Link>
-        ) : (
-          <Link href="/collection" style={{ fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2 }}>
-            Start yours →
-          </Link>
-        )}
+        <ArrowLink href="/collection">
+          {user ? "Go to yours" : "Start yours"}
+        </ArrowLink>
       </div>
 
       {selected && (

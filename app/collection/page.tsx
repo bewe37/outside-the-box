@@ -224,8 +224,8 @@ function CollectionView({
 
       {/* Share + sign out */}
       <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 10, display: "flex", gap: 8 }}>
-        <button onClick={() => setShowShareModal(true)} style={shareBtnStyle}>Share</button>
-        <button onClick={signOut} style={signOutBtnStyle}>Sign out</button>
+        <HoverPillBtn onClick={() => setShowShareModal(true)}>Share</HoverPillBtn>
+        <HoverPillBtn onClick={signOut} muted>Sign out</HoverPillBtn>
       </div>
 
       {/* Share modal */}
@@ -297,6 +297,28 @@ function CollectionView({
         })()}
       </AnimatePresence>
     </div>
+  );
+}
+
+function HoverPillBtn({ children, onClick, muted = false }: { children: React.ReactNode; onClick: () => void; muted?: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
+        fontFamily: "inherit", cursor: "pointer",
+        background: hovered ? "#F4F4F4" : "#FFFFFF",
+        border: "1px solid #E8E8E8",
+        padding: "7px 14px",
+        color: muted ? (hovered ? "#202020" : "#AAAAAA") : "#202020",
+        transition: "background 0.15s ease, color 0.15s ease",
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

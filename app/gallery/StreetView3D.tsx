@@ -85,7 +85,6 @@ function MasonryCard({
           width={600}
           height={h}
           style={{ width: "100%", height: "auto", display: "block", objectFit: "cover", filter: "saturate(1.15)" }}
-          unoptimized
           loading="lazy"
           placeholder="blur"
           blurDataURL={BLUR_PLACEHOLDER}

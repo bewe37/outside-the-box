@@ -89,10 +89,11 @@ export function DetailPanel({
   const PANEL_W_PX = isMobile ? vw : Math.min(560, vw - 48);
   const PANEL_W = isMobile ? "100%" : PANEL_W_PX;
   const isLandscape = aspect !== null && aspect > 1;
-  const heroContainerW = PANEL_W_PX - 32;
-  const HERO_H = aspect
-    ? Math.min(Math.round(heroContainerW / aspect), isMobile ? Math.round(vw * 0.75) : 320)
-    : 320;
+  const heroContainerW = isLandscape && !isMobile ? PANEL_W_PX : PANEL_W_PX - 32;
+  // Mobile: fixed height for all images so layout doesn't shift between portrait/landscape
+  const HERO_H = isMobile
+    ? Math.round(vw * 0.75)
+    : Math.min(Math.round(heroContainerW / (aspect ?? 1)), 320);
   const PANEL_H = isMobile ? "100dvh" : 820;
   const labelW = isMobile ? 100 : 120;
 
@@ -139,7 +140,7 @@ export function DetailPanel({
         </div>
 
         {/* Hero */}
-        <div style={{ flexShrink: 0, paddingInline: 16 }}>
+        <div style={{ flexShrink: 0, paddingInline: isLandscape ? 0 : 16 }}>
           <div
             style={{ position: "relative", width: "100%", height: HERO_H, cursor: "zoom-in" }}
             onClick={() => setLightboxIndex(0)}
@@ -148,7 +149,7 @@ export function DetailPanel({
               src={heroSrc}
               alt={box.title}
               fill
-              style={{ objectFit: isLandscape ? "cover" : "contain" }}
+              style={{ objectFit: isMobile ? "cover" : isLandscape ? "cover" : "contain" }}
               priority
               unoptimized
               placeholder="blur"
