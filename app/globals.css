@@ -15,6 +15,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-weight: 500;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -48,6 +49,79 @@ input[type="range"].col-slider::-moz-range-thumb {
   cursor: pointer;
 }
 
+/* Pill buttons (prev/next/collect in detail panel) */
+.pill-btn {
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.pill-btn:not(:disabled):not(.filled):hover {
+  background-color: #F4F4F4 !important;
+  border-color: #CACACA !important;
+}
+
+/* X close button */
+.close-btn {
+  transition: color 0.15s ease;
+  color: #AAAAAA;
+}
+.close-btn:hover { color: #202020; }
+
+/* Nav page links — centered on desktop, right-aligned on mobile */
+.nav-page-links {
+  display: flex;
+  gap: 8px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+}
+.nav-page-links a {
+  transition: color 0.15s ease;
+}
+.nav-page-links a:hover {
+  color: #202020 !important;
+}
+@media (max-width: 640px) {
+  .nav-page-links {
+    position: static !important;
+    translate: none !important;
+  }
+}
+
+/* Nav links */
+.nav-link {
+  transition: color 0.15s ease;
+}
+.nav-link:not([data-active="true"]):hover { color: #202020 !important; }
+
+/* Wordmark */
+.wordmark {
+  transition: opacity 0.15s ease;
+}
+.wordmark:hover { opacity: 0.6; }
+
+/* Masonry photo card image */
+.masonry-img img {
+  transition: transform 0.3s ease;
+}
+.masonry-img:hover img {
+  transform: scale(1.03);
+}
+
+/* Index row */
+.index-row {
+  transition: background-color 0.15s ease;
+}
+.index-row:hover {
+  background-color: #F7F7F7 !important;
+}
+
+/* Lightbox nav arrows */
+.lightbox-arrow {
+  transition: opacity 0.15s ease;
+  opacity: 0.5;
+}
+.lightbox-arrow:hover { opacity: 1; }
+
 /* Thin custom scrollbar for the lightbox photo strip. */
 .thumb-strip::-webkit-scrollbar {
   height: 4px;
@@ -65,4 +139,66 @@ input[type="range"].col-slider::-moz-range-thumb {
 .thumb-strip {
   scrollbar-width: thin;
   scrollbar-color: #D4D4D4 transparent;
+}
+
+/* Lightbox modal positioning */
+.lightbox-modal {
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+}
+
+/* Nav height token for filter dropdown alignment */
+:root { --nav-h: 48px; }
+
+/* ─── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Nav */
+  .nav-right-slot { display: none !important; }
+
+  /* Collect button — always visible on mobile (no hover state) */
+  .collect-btn-wrap {
+    opacity: 1 !important;
+    transform: scale(1) !important;
+  }
+
+  /* Index view */
+  .index-col { display: none !important; }
+  .index-row-btn { width: 100% !important; }
+  .index-row-inner { width: 100% !important; justify-content: space-between !important; align-items: center !important; }
+  .index-thumb { display: block !important; }
+  .index-date { display: block !important; }
+
+  /* Grid view — force 2 columns on mobile */
+  .masonry-grid { column-count: 2 !important; }
+
+  /* About page — stack sections normally, no indent */
+  .about-sections {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    translate: none !important;
+    padding: 64px 20px 80px !important;
+    overflow-y: auto !important;
+    max-height: 100% !important;
+  }
+  .about-sections > div {
+    margin-left: 0 !important;
+  }
+
+  /* About title — hide on mobile since sections are in flow */
+  .about-title {
+    display: none !important;
+  }
+
+  /* Lightbox — true full screen on mobile */
+  .lightbox-modal {
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    translate: none !important;
+    width: 100% !important;
+    height: 100dvh !important;
+  }
 }

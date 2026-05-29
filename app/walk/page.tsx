@@ -75,8 +75,10 @@ export default function WalkPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   function initAutocomplete() {
-    if (!inputRef.current || !window.google) return;
-    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const g = (window as any).google;
+    if (!inputRef.current || !g) return;
+    const ac = new g.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: "ca" },
       fields: ["geometry"],
       types: ["geocode"],

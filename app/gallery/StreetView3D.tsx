@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Image from "next/image";
 import gsap from "gsap";
 import { formatNeighbourhood, formatYear, type Box } from "@/lib/data";
@@ -58,25 +58,26 @@ function MasonryCard({
   collected,
   showMeta,
   onSelect,
+  onCollect,
 }: {
   box: Box;
   collected: boolean;
   showMeta: boolean;
   onSelect: (box: Box) => void;
+  onCollect: (id: number) => void;
 }) {
   const h = cardH(box.id);
+  const [hovered, setHovered] = useState(false);
 
   return (
     <div style={{ display: "block" }}>
       {/* Image */}
       <div
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          cursor: "pointer",
-          display: "block",
-        }}
+        className="masonry-img"
+        style={{ position: "relative", overflow: "hidden", cursor: "pointer", display: "block" }}
         onClick={() => onSelect(box)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         <Image
           src={cardSrc(box)}
@@ -90,21 +91,36 @@ function MasonryCard({
           blurDataURL={BLUR_PLACEHOLDER}
         />
 
-        {/* Collected dot */}
-        {collected && (
-          <div
-            style={{
-              position: "absolute",
-              top: 9,
-              right: 9,
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: "#ffffff",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-            }}
-          />
-        )}
+
+        {/* Collect button — top-left on hover (always visible on mobile) */}
+        <div
+          className="collect-btn-wrap"
+          style={{
+            position: "absolute", top: 8, left: 8,
+            opacity: hovered ? 1 : 0,
+            transition: "opacity 0.2s ease, transform 0.2s ease",
+            transform: hovered ? "scale(1)" : "scale(0.85)",
+          }}
+          onClick={(e) => { e.stopPropagation(); onCollect(box.id); }}
+        >
+          <div style={{
+            width: 24, height: 24, borderRadius: "50%",
+            background: collected ? "#202020" : "#FFFFFF",
+            border: "1px solid rgba(0,0,0,0.1)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.1)",
+            cursor: "pointer",
+          }}>
+            <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+              {collected ? (
+                <path d="M1 4.5L3.5 7L8 1.5" stroke="#FFFFFF" strokeWidth="1.4" strokeLinecap="square" strokeLinejoin="miter" />
+              ) : (
+                <path d="M4.5 1V8M1 4.5H8" stroke="#202020" strokeWidth="1.4" strokeLinecap="square" />
+              )}
+            </svg>
+          </div>
+        </div>
+
       </div>
 
       {/* Metadata — collapses when column count exceeds threshold */}
@@ -117,7 +133,6 @@ function MasonryCard({
         }}
       >
         <div style={{ padding: "10px 2px 12px" }}>
-          {/* Title */}
           <div
             style={{
               fontSize: size.meta,
@@ -126,17 +141,13 @@ function MasonryCard({
               fontWeight: weight.medium,
               textTransform: "uppercase",
               color: "#202020",
-              marginBottom: 6,
+              marginBottom: 4,
             }}
           >
             {box.title}
           </div>
-
-          {/* Meta */}
-          <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-            <CardMeta label="Artist" value={box.artist} />
-            <CardMeta label="Year" value={formatYear(box.year)} />
-            <CardMeta label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
+          <div style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "#202020", fontWeight: 400 }}>
+            {[box.artist, formatNeighbourhood(box.neighbourhood), formatYear(box.year)].join(" · ")}
           </div>
         </div>
       </div>
@@ -149,6 +160,7 @@ function MasonryCard({
 export default function MasonryView({
   boxes,
   collected,
+  onCollect,
   onSelect,
   columns = 3,
 }: {
@@ -159,47 +171,68 @@ export default function MasonryView({
   columns?: number;
 }) {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const showMeta = columns <= META_THRESHOLD;
+  const [activeColumns, setActiveColumns] = useState(columns);
+  const showMeta = activeColumns <= META_THRESHOLD;
+  const prevColumns = useRef(columns);
+  const isFirstMount = useRef(true);
 
-  // Stagger entrance on mount and when boxes or column count changes
+  // Entrance animation on mount
   useEffect(() => {
-    cardRefs.current = cardRefs.current.slice(0, boxes.length);
     const cards = cardRefs.current.filter(Boolean);
     if (!cards.length) return;
-
+    gsap.killTweensOf(cards);
     gsap.fromTo(
       cards,
       { opacity: 0, y: 18 },
-      {
-        opacity: 1,
-        y: 0,
-        stagger: 0.04,
-        duration: 0.45,
-        ease: "power2.out",
-        clearProps: "transform",
-      }
+      { opacity: 1, y: 0, stagger: 0.04, duration: 0.45, ease: "power2.out", clearProps: "transform,opacity" }
     );
+    isFirstMount.current = false;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boxes]);
 
+  // Column change: scale out → swap count → scale in
+  useEffect(() => {
+    if (isFirstMount.current || columns === prevColumns.current) return;
+    prevColumns.current = columns;
+    const cards = cardRefs.current.filter(Boolean);
+    if (!cards.length) { setActiveColumns(columns); return; }
+
+    gsap.killTweensOf(cards);
+    gsap.to(cards, {
+      scale: 0.88,
+      opacity: 0,
+      duration: 0.14,
+      ease: "power2.in",
+      onComplete: () => {
+        setActiveColumns(columns);
+        requestAnimationFrame(() => {
+          const fresh = cardRefs.current.filter(Boolean);
+          gsap.killTweensOf(fresh);
+          gsap.fromTo(
+            fresh,
+            { scale: 0.92, opacity: 0 },
+            { scale: 1, opacity: 1, stagger: 0.02, duration: 0.28, ease: "power2.out", clearProps: "transform,opacity" }
+          );
+        });
+      },
+    });
+  }, [columns]);
+
   return (
-    <div style={{ flex: 1, overflowY: "auto", padding: 8, paddingTop: 0 }}>
-      <div
-        style={{
-          columnCount: columns,
-          columnGap: 12,
-        }}
-      >
+    <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 20, paddingTop: 48 }}>
+      <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 20 }}>
         {boxes.map((box, i) => (
           <div
             key={box.id}
             ref={(el) => { cardRefs.current[i] = el; }}
-            style={{ breakInside: "avoid", marginBottom: 12 }}
+            style={{ breakInside: "avoid", marginBottom: 20 }}
           >
             <MasonryCard
               box={box}
               collected={collected.has(box.id)}
               showMeta={showMeta}
               onSelect={onSelect}
+              onCollect={onCollect}
             />
           </div>
         ))}

@@ -8,6 +8,7 @@ import { type Box } from "@/lib/data";
 const CARD_H = 1.8;
 const MIN_ASPECT = 0.6;
 const MAX_ASPECT = 1.78;
+const MAX_ASPECT_MOBILE = 0.95;
 const GAP = 0.28;
 const ARC_DEPTH = 2.2;
 const ARC_TILT = 0.55;
@@ -67,7 +68,7 @@ function makeMaterial(tex?: THREE.Texture) {
   });
 }
 
-function Gallery({ boxes, onSelect }: { boxes: Box[]; onSelect: (box: Box) => void }) {
+function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSelect: (box: Box) => void; userPhotos: Record<number, string>; isMobile: boolean }) {
   const { scene, camera } = useThree();
   const focusRef = useRef(0);
   const targetFocus = useRef(0);
@@ -97,17 +98,20 @@ function Gallery({ boxes, onSelect }: { boxes: Box[]; onSelect: (box: Box) => vo
 
       const geo = new THREE.PlaneGeometry(w, CARD_H);
       const mat = makeMaterial();
+      // Start invisible — revealed once texture is ready to avoid grey flash
+      mat.uniforms.uDim.value = 0;
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.x = cx;
       scene.add(mesh);
       meshes.push(mesh);
 
-      loader.load(box.images![0], (tex) => {
+      loader.load(userPhotos[box.id] ?? box.images![0], (tex) => {
         const img = tex.image as HTMLImageElement;
         const aspect = clampAspect(img.naturalWidth / img.naturalHeight);
-        const newW = CARD_H * aspect;
+        const cardH = (isMobile && aspect > 1) ? CARD_H * 0.72 : CARD_H;
+        const newW = cardH * aspect;
 
-        const newGeo = new THREE.PlaneGeometry(newW, CARD_H);
+        const newGeo = new THREE.PlaneGeometry(newW, cardH);
         mesh.geometry.dispose();
         mesh.geometry = newGeo;
 
@@ -123,6 +127,7 @@ function Gallery({ boxes, onSelect }: { boxes: Box[]; onSelect: (box: Box) => vo
         shader.uniforms.uMap.value = tex;
         shader.uniforms.uSaturation.value = SATURATION;
         shader.needsUpdate = true;
+        mesh.userData.ready = true;
       });
     });
 
@@ -225,24 +230,29 @@ function Gallery({ boxes, onSelect }: { boxes: Box[]; onSelect: (box: Box) => vo
       mesh.position.z = z;
       mesh.rotation.y = ry;
       mesh.scale.setScalar(scale);
-      (mesh.material as THREE.ShaderMaterial).uniforms.uDim.value = dim;
+      // Only show once texture is loaded — fade in smoothly
+      const shader = mesh.material as THREE.ShaderMaterial;
+      if (mesh.userData.ready) {
+        shader.uniforms.uDim.value += (dim - shader.uniforms.uDim.value) * 0.08;
+      }
     });
   });
 
   return null;
 }
 
-export default function CollectionGallery3D({ boxes, onSelect }: { boxes: Box[]; onSelect: (box: Box) => void }) {
+export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }: { boxes: Box[]; onSelect: (box: Box) => void; userPhotos?: Record<number, string> }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
   return (
     <Canvas
-      camera={{ position: [0, 0, 4], fov: 46 }}
+      camera={{ position: [0, 0, isMobile ? 6.5 : 4], fov: 46 }}
       gl={{ antialias: true, alpha: false }}
       style={{ width: "100%", height: "100%", background: "#FFFFFF" }}
       dpr={[1, 2]}
     >
       <color attach="background" args={["#FFFFFF"]} />
       <Suspense fallback={null}>
-        <Gallery boxes={boxes} onSelect={onSelect} />
+        <Gallery boxes={boxes} onSelect={onSelect} userPhotos={userPhotos} isMobile={isMobile} />
       </Suspense>
     </Canvas>
   );

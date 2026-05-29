@@ -4,8 +4,11 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { use } from "react";
+import { useRouter } from "next/navigation";
 import { type Box } from "@/lib/data";
 import { size, tracking } from "@/lib/typography";
+import { useAuth } from "@/app/components/auth-context";
+import { supabase } from "@/lib/supabase";
 
 const CollectionGallery3D = dynamic(() => import("../CollectionGallery3D"), { ssr: false });
 
@@ -15,9 +18,30 @@ const centeredFlex: React.CSSProperties = {
 
 export default function PublicCollectionPage({ params }: { params: Promise<{ username: string }> }) {
   const { username } = use(params);
+  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
+
   const [boxes, setBoxes] = useState<Box[] | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [selected, setSelected] = useState<Box | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
+
+  // If signed in, check if this is their own collection and redirect if so
+  useEffect(() => {
+    if (authLoading || !user) return;
+    supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.username === username) {
+          router.replace("/collection");
+        } else {
+          setIsOwner(false);
+        }
+      });
+  }, [user, authLoading, username, router]);
 
   useEffect(() => {
     fetch(`/api/profile/${encodeURIComponent(username)}`)
@@ -64,18 +88,27 @@ export default function PublicCollectionPage({ params }: { params: Promise<{ use
 
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      {/* Byline */}
-      <div style={{
-        position: "absolute", top: 16, left: 20, zIndex: 10,
-        fontSize: size.caption, letterSpacing: tracking.loose,
-        textTransform: "uppercase", color: "#AAAAAA",
-        fontFamily: '"Geist", system-ui, sans-serif',
-        pointerEvents: "none",
-      }}>
-        {username}'s collection
-      </div>
-
       <CollectionGallery3D boxes={boxes} onSelect={setSelected} />
+
+      {/* Viewer banner — shown to everyone since owner gets redirected */}
+      <div style={{
+        position: "absolute", bottom: 20, left: 20, zIndex: 10,
+        display: "flex", alignItems: "center", gap: 16,
+        fontFamily: '"Geist", system-ui, sans-serif',
+      }}>
+        <span style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
+          {username}'s collection
+        </span>
+        {user ? (
+          <Link href="/collection" style={{ fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2 }}>
+            Go to yours →
+          </Link>
+        ) : (
+          <Link href="/collection" style={{ fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2 }}>
+            Start yours →
+          </Link>
+        )}
+      </div>
 
       {selected && (
         <div
@@ -93,15 +126,19 @@ export default function PublicCollectionPage({ params }: { params: Promise<{ use
             backgroundColor: "#FFFFFF", border: "1px solid #C9C9C9",
             padding: 24, maxWidth: 480, width: "100%",
             fontFamily: '"Geist", system-ui, sans-serif',
+            display: "flex", flexDirection: "column", gap: 12,
           }}>
-            <p style={{ margin: "0 0 8px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
+            <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
               {selected.title}
             </p>
             <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#CACACA" }}>
-              Sign in to add to your collection
+              {user ? "Add this to your collection" : "Sign in to start your own collection"}
             </p>
-            <Link href="/collection" style={{ display: "inline-block", marginTop: 16, fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2 }}>
-              Sign in →
+            <Link
+              href="/collection"
+              style={{ fontSize: size.caption, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", textDecoration: "none", borderBottom: "1px solid #E8E8E8", paddingBottom: 2, width: "fit-content" }}
+            >
+              {user ? "Go to your collection →" : "Sign in →"}
             </Link>
           </div>
         </div>

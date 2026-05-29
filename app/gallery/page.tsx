@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
@@ -12,6 +12,7 @@ import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { Toast } from "@/app/components/Toast";
 import gsap from "gsap";
 
 const StreetView = dynamic(() => import("./StreetView3D"), { ssr: false });
@@ -37,14 +38,37 @@ export default function GalleryPage() {
   const [collected, setCollected] = useState<Set<number>>(new Set());
   const [gridSelected, setGridSelected] = useState<Box | null>(null);
   const [photoColumns, setPhotoColumns] = useState(3);
+  const prevColumns = useRef(3);
+
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+
+  // Set initial columns based on screen width after mount
+  useEffect(() => {
+    if (window.innerWidth <= 640) {
+      setPhotoColumns(2);
+      prevColumns.current = 2;
+    }
+  }, []);
   const { setRight } = useNav();
-  const { user } = useAuth();
+  const { user, setCollectionCount } = useAuth();
   const router = useRouter();
+  const [toast, setToast] = useState("");
   // Only show boxes that have at least one admin-uploaded photo.
   const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
   const [allBoxes, setAllBoxes] = useState<Box[]>(() => boxes.filter(hasUpload));
+  const [boxesError, setBoxesError] = useState(false);
+  const [activeNeighbourhoods, setActiveNeighbourhoods] = useState<Set<string>>(new Set());
 
-  const filtered = allBoxes;
+  const neighbourhoods = useMemo(
+    () => Array.from(new Set(allBoxes.map((b) => b.neighbourhood))).sort(),
+    [allBoxes]
+  );
+
+  const hasActiveFilter = activeNeighbourhoods.size > 0;
+
+  const filtered = hasActiveFilter
+    ? allBoxes.filter((b) => activeNeighbourhoods.has(b.neighbourhood))
+    : allBoxes;
 
   useEffect(() => {
     fetch("/api/boxes")
@@ -52,7 +76,7 @@ export default function GalleryPage() {
       .then((extra: Box[]) => {
         setAllBoxes([...boxes, ...extra].filter(hasUpload));
       })
-      .catch(() => {});
+      .catch(() => setBoxesError(true));
   }, []);
 
   useEffect(() => {
@@ -79,39 +103,21 @@ export default function GalleryPage() {
   }, [gridSelected, filtered]);
 
   useEffect(() => {
-    const viewControls = (
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        {(["PHOTOS", "INDEX"] as ViewMode[]).map((v) => (
-          <button
-            key={v}
-            onClick={() => setView(v)}
-            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}
-          >
-            <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: view === v ? "#202020" : "#A8A8A8" }}>
-              {view === v ? `(${v})` : v}
-            </span>
-          </button>
-        ))}
-        {view === "PHOTOS" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8" }}>
-            <input
-              type="range"
-              className="col-slider"
-              min={2}
-              max={6}
-              value={photoColumns}
-              onChange={(e) => setPhotoColumns(Number(e.target.value))}
-            />
-            <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "#202020", minWidth: 10, fontFamily: "inherit" }}>
-              {photoColumns}
-            </span>
-          </div>
-        )}
-      </div>
+    if (isMobile) return;
+    setRight(
+      <GalleryControls
+        view={view}
+        onViewChange={setView}
+        photoColumns={photoColumns}
+        onColumnsChange={setPhotoColumns}
+        prevColumnsRef={prevColumns}
+        neighbourhoods={neighbourhoods}
+        activeNeighbourhoods={activeNeighbourhoods}
+        onNeighbourhoodsChange={setActiveNeighbourhoods}
+      />
     );
-    setRight(viewControls);
     return () => setRight(null);
-  }, [view, photoColumns, setRight]);
+  }, [view, photoColumns, setRight, neighbourhoods, activeNeighbourhoods, isMobile]);
 
   async function toggleCollect(id: number) {
     if (!user) { router.push("/collection"); return; }
@@ -123,12 +129,23 @@ export default function GalleryPage() {
       else next.add(id);
       return next;
     });
-    if (isCollected) {
-      await supabase.from("collections").delete().match({ user_id: user.id, box_id: id });
-    } else {
-      await supabase.from("collections").insert({ user_id: user.id, box_id: id });
+    setCollectionCount((prev) => isCollected ? prev - 1 : prev + 1);
+    const { error } = isCollected
+      ? await supabase.from("collections").delete().match({ user_id: user.id, box_id: id })
+      : await supabase.from("collections").insert({ user_id: user.id, box_id: id });
+    if (error) {
+      // Rollback optimistic update
+      setCollected((prev) => {
+        const next = new Set(prev);
+        if (isCollected) next.add(id);
+        else next.delete(id);
+        return next;
+      });
+      setCollectionCount((prev) => isCollected ? prev + 1 : prev - 1);
+      setToast("Couldn't update collection — try again");
     }
   }
+
 
   return (
     <div
@@ -142,9 +159,25 @@ export default function GalleryPage() {
         overflow: "hidden",
       }}
     >
+      <AnimatePresence>
+        {toast && <Toast key={toast} message={toast} onDone={() => setToast("")} />}
+      </AnimatePresence>
+      {boxesError && (
+        <div style={{ paddingInline: 12, paddingBlock: 6, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA", fontFamily: '"Geist", system-ui, sans-serif', borderBottom: "1px solid #F4F4F4" }}>
+          Some boxes couldn't be loaded
+        </div>
+      )}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", position: "relative" }}>
+        {/* Filter empty state */}
+        {filtered.length === 0 && hasActiveFilter && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: '"Geist", system-ui, sans-serif' }}>
+            <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#CACACA" }}>
+              No boxes match your filter
+            </p>
+          </div>
+        )}
         <AnimatePresence mode="wait">
-          {view === "INDEX" ? (
+          {filtered.length === 0 ? null : view === "INDEX" ? (
             <motion.div
               key="index"
               initial={{ opacity: 0 }}
@@ -197,22 +230,20 @@ export default function GalleryPage() {
                 backgroundColor: "rgba(255, 255, 255, 0.85)",
                 backdropFilter: "blur(12px)",
                 WebkitBackdropFilter: "blur(12px)",
-                zIndex: 20,
+                zIndex: 50,
                 cursor: "default",
               }}
             />
-            {/* Centered modal */}
+            {/* Centered modal — full screen on mobile */}
             <motion.div
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.98 }}
               transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+              className="lightbox-modal"
               style={{
                 position: "fixed",
-                top: "50%",
-                left: "50%",
-                translate: "-50% -50%",
-                zIndex: 21,
+                zIndex: 51,
               }}
             >
               {(() => {
@@ -227,6 +258,7 @@ export default function GalleryPage() {
                     onNext={() => { if (i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]); }}
                     hasPrev={i > 0}
                     hasNext={i >= 0 && i < filtered.length - 1}
+                    onClose={() => setGridSelected(null)}
                   />
                 );
               })()}
@@ -315,7 +347,7 @@ function IndexView({
         flex: 1,
         position: "relative",
         overflowY: "auto",
-        paddingTop: 8,
+        paddingTop: 48,
       }}
     >
       {boxes.map((box, i) => (
@@ -405,6 +437,7 @@ function IndexRow({
       onClick={onSelect}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      className="index-row index-row-btn"
       style={{
         display: "flex",
         alignItems: "center",
@@ -419,11 +452,97 @@ function IndexRow({
         fontFamily: "inherit",
       }}
     >
-      {/* Number + Title — 400px */}
-      <div style={{ width: 400, flexShrink: 0, display: "flex", paddingLeft: 16, paddingRight: 24, boxSizing: "border-box" }}>
+      {/* Inner row — becomes full-width flex on mobile */}
+      <div className="index-row-inner" style={{ display: "flex", alignItems: "center" }}>
+
+        {/* Number + Title — 400px */}
+        <div style={{ width: 400, flexShrink: 0, display: "flex", flexDirection: "column", paddingLeft: 16, paddingRight: 24, boxSizing: "border-box", gap: 2 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span
+              style={{
+                flexShrink: 0,
+                fontSize: size.meta,
+                lineHeight: leading.meta,
+                letterSpacing: tracking.label,
+                textTransform: "uppercase",
+                color: textColor,
+                transition,
+              }}
+            >
+              ({String(displayNumber).padStart(2, "0")})
+            </span>
+            <span
+              style={{
+                fontSize: size.meta,
+                lineHeight: leading.meta,
+                letterSpacing: tracking.label,
+                textTransform: "uppercase",
+                color: textColor,
+                transition,
+              }}
+            >
+              {box.title}
+            </span>
+          </div>
+          {/* Date — only visible on mobile */}
+          <span
+            className="index-date"
+            style={{
+              display: "none",
+              fontSize: size.meta,
+              lineHeight: leading.meta,
+              letterSpacing: tracking.label,
+              color: textColor,
+              transition,
+            }}
+          >
+            {box.captured}
+          </span>
+        </div>
+
+        {/* Artist — 180px */}
         <span
+          className="index-col"
           style={{
-            width: 56,
+            width: 180,
+            flexShrink: 0,
+            paddingRight: 24,
+            boxSizing: "border-box",
+            fontSize: size.meta,
+            lineHeight: leading.meta,
+            letterSpacing: tracking.label,
+            textTransform: "uppercase",
+            color: textColor,
+            transition,
+          }}
+        >
+          {box.artist}
+        </span>
+
+        {/* Address — 280px */}
+        <span
+          className="index-col"
+          style={{
+            width: 280,
+            flexShrink: 0,
+            paddingRight: 24,
+            boxSizing: "border-box",
+            fontSize: size.meta,
+            lineHeight: leading.meta,
+            letterSpacing: tracking.label,
+            textTransform: "uppercase",
+            color: textColor,
+            transition,
+          }}
+        >
+          {formatAddress(box.address)}
+        </span>
+
+        {/* Neighbourhood — 220px */}
+        <span
+          className="index-col"
+          style={{
+            width: 220,
             flexShrink: 0,
             fontSize: size.meta,
             lineHeight: leading.meta,
@@ -433,88 +552,48 @@ function IndexRow({
             transition,
           }}
         >
-          ({String(displayNumber).padStart(3, "0")})
+          {formatNeighbourhood(box.neighbourhood)}
         </span>
+
+        {/* Collected dot */}
         <span
           style={{
-            fontSize: size.meta,
-            lineHeight: leading.meta,
-            letterSpacing: tracking.label,
-            textTransform: "uppercase",
-            color: textColor,
+            marginLeft: 16,
+            marginRight: 16,
+            width: 5,
+            height: 5,
+            borderRadius: "50%",
+            flexShrink: 0,
+            backgroundColor: isCollected ? "#202020" : "transparent",
+            display: "inline-block",
             transition,
           }}
-        >
-          {box.title}
-        </span>
+        />
+
+        {/* Thumbnail — only visible on mobile */}
+        {box.images?.[0] && (
+          <div
+            className="index-thumb"
+            style={{
+              display: "none",
+              width: 80,
+              height: 80,
+              flexShrink: 0,
+              overflow: "hidden",
+              marginRight: 16,
+            }}
+          >
+            <Image
+              src={box.images[0]}
+              alt={box.title}
+              width={80}
+              height={80}
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              unoptimized
+            />
+          </div>
+        )}
       </div>
-
-      {/* Artist — 180px */}
-      <span
-        style={{
-          width: 180,
-          flexShrink: 0,
-          paddingRight: 24,
-          boxSizing: "border-box",
-          fontSize: size.meta,
-          lineHeight: leading.meta,
-          letterSpacing: tracking.label,
-          textTransform: "uppercase",
-          color: textColor,
-          transition,
-        }}
-      >
-        {box.artist}
-      </span>
-
-      {/* Address — 280px */}
-      <span
-        style={{
-          width: 280,
-          flexShrink: 0,
-          paddingRight: 24,
-          boxSizing: "border-box",
-          fontSize: size.meta,
-          lineHeight: leading.meta,
-          letterSpacing: tracking.label,
-          textTransform: "uppercase",
-          color: textColor,
-          transition,
-        }}
-      >
-        {formatAddress(box.address)}
-      </span>
-
-      {/* Neighbourhood — 220px */}
-      <span
-        style={{
-          width: 220,
-          flexShrink: 0,
-          fontSize: size.meta,
-          lineHeight: leading.meta,
-          letterSpacing: tracking.label,
-          textTransform: "uppercase",
-          color: textColor,
-          transition,
-        }}
-      >
-        {formatNeighbourhood(box.neighbourhood)}
-      </span>
-
-      {/* Collected dot */}
-      <span
-        style={{
-          marginLeft: 16,
-          marginRight: 16,
-          width: 5,
-          height: 5,
-          borderRadius: "50%",
-          flexShrink: 0,
-          backgroundColor: isCollected ? "#202020" : "transparent",
-          display: "inline-block",
-          transition,
-        }}
-      />
     </button>
   );
 }
@@ -884,3 +963,175 @@ function Stamp({
   );
 }
 
+// ─── ClearButton ──────────────────────────────────────────────────────────────
+
+function ClearButton({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={enabled ? onClick : undefined}
+      onMouseEnter={() => enabled && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        width: "100%", padding: "5px 12px", background: "none", border: "none",
+        cursor: enabled ? "pointer" : "default", textAlign: "left", fontFamily: "inherit",
+        fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
+        color: enabled ? (hovered ? "#202020" : "#A8A8A8") : "#D8D8D8",
+        transition: "color 0.12s ease",
+      }}
+    >
+      Clear
+    </button>
+  );
+}
+
+// ─── HoverBtn ─────────────────────────────────────────────────────────────────
+
+const HoverBtn = React.forwardRef<HTMLButtonElement, {
+  children: React.ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  className?: string;
+}>(function HoverBtn({ children, onClick, active, className }, ref) {
+  const [hovered, setHovered] = useState(false);
+  const color = active || hovered ? "#202020" : "#A8A8A8";
+  return (
+    <button
+      ref={ref}
+      onClick={onClick}
+      className={className}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: "none", border: "none", outline: "none", cursor: "pointer",
+        padding: 0, fontFamily: "inherit",
+        fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label,
+        textTransform: "uppercase", color, transition: "color 0.12s ease",
+      }}
+    >
+      {children}
+    </button>
+  );
+});
+
+// ─── GalleryControls ──────────────────────────────────────────────────────────
+
+function GalleryControls({
+  view, onViewChange, photoColumns, onColumnsChange, prevColumnsRef,
+  neighbourhoods, activeNeighbourhoods, onNeighbourhoodsChange,
+}: {
+  view: "INDEX" | "PHOTOS";
+  onViewChange: (v: "INDEX" | "PHOTOS") => void;
+  photoColumns: number;
+  onColumnsChange: (n: number) => void;
+  prevColumnsRef: React.MutableRefObject<number>;
+  neighbourhoods: string[];
+  activeNeighbourhoods: Set<string>;
+  onNeighbourhoodsChange: (s: Set<string>) => void;
+}) {
+  const [showFilter, setShowFilter] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  function toggle(n: string) {
+    const next = new Set(activeNeighbourhoods);
+    if (next.has(n)) next.delete(n); else next.add(n);
+    onNeighbourhoodsChange(next);
+  }
+
+  useEffect(() => {
+    if (!showFilter) return;
+    const onDown = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) {
+        setShowFilter(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowFilter(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [showFilter]);
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {(["PHOTOS", "INDEX"] as const).map((v) => (
+          <HoverBtn key={v} onClick={() => onViewChange(v)} active={view === v}>
+            [{v === "PHOTOS" ? "GRID" : v}]
+          </HoverBtn>
+        ))}
+
+        <AnimatePresence>
+          {view === "PHOTOS" && (
+            <motion.div key="slider" className="nav-slider" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} style={{ overflow: "hidden", display: "flex", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8" }}>
+                <input type="range" className="col-slider" min={2} max={6} value={photoColumns}
+                  onChange={(e) => { prevColumnsRef.current = photoColumns; onColumnsChange(Number(e.target.value)); }}
+                />
+                <span style={{ display: "inline-block", width: 10, height: 16, overflow: "hidden", position: "relative", verticalAlign: "middle" }}>
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={photoColumns}
+                      initial={{ y: photoColumns > prevColumnsRef.current ? "100%" : "-100%" }}
+                      animate={{ y: "0%" }}
+                      exit={{ y: photoColumns > prevColumnsRef.current ? "-100%" : "100%" }}
+                      transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+                      style={{ display: "block", fontSize: size.meta, lineHeight: "16px", letterSpacing: tracking.normal, color: "#202020", fontFamily: "inherit", textAlign: "center" }}
+                    >
+                      {photoColumns}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="nav-divider" style={{ width: 1, height: 12, background: "#E8E8E8" }} />
+        <HoverBtn
+          ref={btnRef}
+          className="nav-filter"
+          onClick={() => setShowFilter((s) => !s)}
+          active={activeNeighbourhoods.size > 0 || showFilter}
+        >
+          {activeNeighbourhoods.size > 0 ? `[Filter (${activeNeighbourhoods.size})]` : "[Filter]"}
+        </HoverBtn>
+      </div>
+
+      <AnimatePresence>
+        {showFilter && (
+          <motion.div
+            ref={panelRef}
+            initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
+            style={{ position: "fixed", top: 44, right: 16, zIndex: 200, background: "#FFFFFF", border: "1px solid #E8E8E8", boxShadow: "0 8px 32px rgba(0,0,0,0.08)", padding: "6px 0", minWidth: 160, fontFamily: '"Geist", system-ui, sans-serif' }}
+          >
+            <div style={{ padding: "4px 12px 6px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Neighbourhood</div>
+            {neighbourhoods.map((n) => {
+              const checked = activeNeighbourhoods.has(n);
+              return (
+                <button key={n} onClick={() => toggle(n)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 7, padding: "5px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: size.meta, letterSpacing: tracking.normal, color: checked ? "#202020" : "#606060", transition: "color 0.12s ease" }}
+                >
+                  <span style={{ width: 13, height: 13, border: `1px solid ${checked ? "#202020" : "#D0D0D0"}`, borderRadius: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#202020" : "transparent", transition: "all 0.12s ease" }}>
+                    {checked && (
+                      <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
+                        <path d="M1 3L2.8 5L6 1" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  {formatNeighbourhood(n)}
+                </button>
+              );
+            })}
+            <div style={{ height: 1, background: "#F0F0F0", margin: "4px 0" }} />
+            <ClearButton
+              enabled={activeNeighbourhoods.size > 0}
+              onClick={() => { onNeighbourhoodsChange(new Set()); setShowFilter(false); }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}

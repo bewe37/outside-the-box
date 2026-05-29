@@ -8,6 +8,28 @@ import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
 import { supabase } from "@/lib/supabase";
 
+function NavPageLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: size.meta,
+        lineHeight: leading.meta,
+        letterSpacing: tracking.label,
+        textTransform: "uppercase",
+        color: active || hovered ? "#202020" : "#A8A8A8",
+        textDecoration: "none",
+        transition: "color 0.15s ease",
+      }}
+    >
+      [{label}]
+    </Link>
+  );
+}
+
 export function SiteNav() {
   const pathname = usePathname();
   const [count, setCount] = useState(0);
@@ -23,50 +45,44 @@ export function SiteNav() {
       .then(({ count: c }) => setCount(c ?? 0));
   }, [user]);
 
+  const links = [
+    { href: "/gallery", label: "BOXES" },
+    { href: "/about", label: "ABOUT" },
+    { href: "/collection", label: "COLLECTION" },
+  ];
+
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        height: 44,
+        height: 48,
         boxSizing: "border-box",
-        paddingInline: 8,
-        position: "relative",
-        flexShrink: 0,
+        paddingInline: 16,
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 40,
         background: "#FFFFFF",
         borderBottom: "1px solid transparent",
       }}
     >
       {/* Wordmark */}
-      <Link href="/gallery" style={wordmark}>
+      <Link href="/gallery" style={{ ...wordmark, color: "#202020" }}>
         OutsideTheBox
       </Link>
 
-      {/* Center links */}
-      <div
-        style={{
-          display: "flex",
-          gap: 20,
-          position: "absolute",
-          left: "50%",
-          top: "50%",
-          translate: "-50% -50%",
-        }}
-      >
-        <NavLink href="/gallery" active={pathname === "/gallery"}>
-          GALLERY
-        </NavLink>
-        <NavLink href="/about" active={pathname === "/about"}>
-          ABOUT
-        </NavLink>
-        <NavLink href="/collection" active={pathname === "/collection"}>
-          MY COLLECTION ({count})
-        </NavLink>
+      {/* Center links — desktop: absolutely centered; mobile: moved to right */}
+      <div className="nav-page-links">
+        {links.map(({ href, label }) => (
+          <NavPageLink key={href} href={href} label={label} active={pathname === href} />
+        ))}
       </div>
 
-      {/* Right slot — injected by the active page */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      {/* Right slot — desktop: right edge; mobile: center */}
+      <div className="nav-right-slot" style={{ color: "#202020" }}>
         {right}
       </div>
     </div>
@@ -104,7 +120,6 @@ const wordmark: React.CSSProperties = {
   letterSpacing: tracking.label,
   fontWeight: 500,
   textTransform: "uppercase",
-  color: "#202020",
   textDecoration: "none",
   lineHeight: "14px",
   whiteSpace: "pre",
