@@ -153,8 +153,7 @@ export function DetailPanel({
               alt={box.title}
               fill
               style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease" }}
-              priority
-              onLoad={() => setHeroLoaded(true)}
+              onLoad={() => setTimeout(() => setHeroLoaded(true), 80)}
             />
           </div>
           {onSwapPhoto && (
