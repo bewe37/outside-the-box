@@ -59,15 +59,18 @@ function MasonryCard({
   showMeta,
   onSelect,
   onCollect,
+  priority = false,
 }: {
   box: Box;
   collected: boolean;
   showMeta: boolean;
   onSelect: (box: Box) => void;
   onCollect: (id: number) => void;
+  priority?: boolean;
 }) {
   const h = cardH(box.id);
   const [hovered, setHovered] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   return (
     <div style={{ display: "block" }}>
@@ -79,6 +82,13 @@ function MasonryCard({
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
+        {/* Shimmer skeleton shown until image loads */}
+        {!loaded && (
+          <div
+            className="img-shimmer"
+            style={{ position: "absolute", inset: 0, zIndex: 1 }}
+          />
+        )}
         <Image
           src={cardSrc(box)}
           alt={box.title}
@@ -86,8 +96,9 @@ function MasonryCard({
           height={h}
           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
           quality={75}
-          style={{ width: "100%", height: "auto", display: "block", objectFit: "cover", filter: "saturate(1.15)" }}
+          style={{ width: "100%", height: "auto", display: "block", objectFit: "cover", filter: "saturate(1.15)", opacity: loaded ? 1 : 0, transition: "opacity 0.3s ease" }}
           loading="lazy"
+          onLoad={() => setLoaded(true)}
         />
 
 

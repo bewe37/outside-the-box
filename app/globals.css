@@ -107,6 +107,17 @@ input[type="range"].col-slider::-moz-range-thumb {
   transform: scale(1.03);
 }
 
+/* Shimmer skeleton for loading images */
+.img-shimmer {
+  background: linear-gradient(90deg, #F0F0F0 25%, #E0E0E0 50%, #F0F0F0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Index row */
 .index-row {
   transition: background-color 0.15s ease;
