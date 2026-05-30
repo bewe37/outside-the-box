@@ -101,10 +101,7 @@ input[type="range"].col-slider::-moz-range-thumb {
 
 /* Masonry photo card image */
 .masonry-img img {
-  transition: transform 0.3s ease;
-}
-.masonry-img:hover img {
-  transform: scale(1.03);
+  transition: none;
 }
 
 /* Shimmer skeleton for loading images */

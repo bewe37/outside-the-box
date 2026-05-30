@@ -192,14 +192,14 @@ export default function AboutPage() {
             position: "absolute",
             bottom: 20,
             right: 20,
-            fontSize: size.caption,
-            letterSpacing: tracking.loose,
+            fontSize: size.meta,
+            letterSpacing: tracking.normal,
             color: "#A8A8A8",
             zIndex: 10,
             pointerEvents: "auto",
           }}
         >
-          Made by{" "}
+          A project by{" "}
           <a
             href="https://x.com/gbryanwt"
             target="_blank"

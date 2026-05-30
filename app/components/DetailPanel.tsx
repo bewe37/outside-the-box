@@ -323,24 +323,6 @@ export function DetailPanel({
   );
 }
 
-// Convert lat/lng to OSM tile x/y at a given zoom level
-function latLngToTile(lat: number, lng: number, zoom: number) {
-  const n = Math.pow(2, zoom);
-  const x = Math.floor((lng + 180) / 360 * n);
-  const latRad = lat * Math.PI / 180;
-  const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n);
-  return { x, y };
-}
-
-// Pixel offset of lat/lng within its tile (0–256)
-function latLngToPixel(lat: number, lng: number, zoom: number) {
-  const n = Math.pow(2, zoom);
-  const px = ((lng + 180) / 360 * n % 1) * 256;
-  const latRad = lat * Math.PI / 180;
-  const py = ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * n % 1) * 256;
-  return { px, py };
-}
-
 function MapAddress({ address, lat: initLat, lng: initLng }: { address: string; lat?: number; lng?: number }) {
   const [hovered, setHovered] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -355,22 +337,8 @@ function MapAddress({ address, lat: initLat, lng: initLng }: { address: string; 
   useEffect(() => { setMounted(true); }, []);
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ", Toronto, Ontario")}`;
 
-  const zoom = 15;
   const W = 240, H = 160;
-  const TILE = 256;
-
-  const mapData = coords ? (() => {
-    const { x: tx, y: ty } = latLngToTile(coords.lat, coords.lng, zoom);
-    const { px, py } = latLngToPixel(coords.lat, coords.lng, zoom);
-    const offsetX = W / 2 - px;
-    const offsetY = H / 2 - py;
-    const tiles = [
-      { x: tx - 1, y: ty - 1 }, { x: tx, y: ty - 1 }, { x: tx + 1, y: ty - 1 },
-      { x: tx - 1, y: ty },     { x: tx, y: ty },     { x: tx + 1, y: ty },
-      { x: tx - 1, y: ty + 1 }, { x: tx, y: ty + 1 }, { x: tx + 1, y: ty + 1 },
-    ];
-    return { tiles, offsetX, offsetY, tx, ty };
-  })() : null;
+  const mapSrc = coords ? `/api/map?lat=${coords.lat}&lng=${coords.lng}` : null;
 
   async function handleMouseEnter() {
     if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
@@ -395,7 +363,6 @@ function MapAddress({ address, lat: initLat, lng: initLng }: { address: string; 
     leaveTimer.current = setTimeout(() => setHovered(false), 120);
   }
 
-  // Portal tooltip — rendered into body so it escapes overflow:hidden
   const tooltip = mounted && hovered && rect ? createPortal(
     <div
       style={{
@@ -408,42 +375,14 @@ function MapAddress({ address, lat: initLat, lng: initLng }: { address: string; 
         overflow: "hidden",
         boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
         zIndex: 9999,
-        background: "#E8E8E8",
+        background: "#F0F0F0",
         pointerEvents: "none",
       }}
     >
-      {mapData ? (
-        <>
-          <div style={{ position: "absolute", inset: 0 }}>
-            {mapData.tiles.map(({ x, y }) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={`${x}-${y}`}
-                src={`https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`}
-                alt=""
-                width={TILE}
-                height={TILE}
-                style={{
-                  position: "absolute",
-                  left: mapData.offsetX + (x - mapData.tx) * TILE,
-                  top:  mapData.offsetY + (y - mapData.ty) * TILE,
-                  width: TILE, height: TILE, display: "block",
-                }}
-              />
-            ))}
-          </div>
-          <div style={{
-            position: "absolute",
-            left: W / 2 - 5, top: H / 2 - 5,
-            width: 10, height: 10,
-            borderRadius: "50%",
-            background: "#202020",
-            border: "2px solid #FFFFFF",
-            boxShadow: "0 1px 4px rgba(0,0,0,0.3)",
-          }} />
-        </>
+      {mapSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={mapSrc} alt="" width={W} height={H} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
       ) : (
-        // Loading state while geocoding
         <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
             Loading…
