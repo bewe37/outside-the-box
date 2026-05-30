@@ -399,9 +399,6 @@ function IndexView({
               alt={hovered.title}
               fill
               style={{ objectFit: "cover" }}
-              unoptimized
-              placeholder="blur"
-              blurDataURL={BLUR_PLACEHOLDER}
             />
           </motion.div>
         )}
@@ -589,7 +586,6 @@ function IndexRow({
               width={80}
               height={80}
               style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              unoptimized
             />
           </div>
         )}

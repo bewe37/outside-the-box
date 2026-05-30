@@ -151,9 +151,6 @@ export function DetailPanel({
               fill
               style={{ objectFit: isLandscape ? "cover" : "contain" }}
               priority
-              unoptimized
-              placeholder="blur"
-              blurDataURL={BLUR_PLACEHOLDER}
             />
           </div>
           {onSwapPhoto && (
@@ -205,7 +202,7 @@ export function DetailPanel({
                     onClick={() => setLightboxIndex(i + 1)}
                     style={{ flex: "0 0 88px", width: 88, height: 88, position: "relative", scrollSnapAlign: "start", cursor: "zoom-in" }}
                   >
-                    <Image src={src} alt="" fill style={{ objectFit: "cover" }} unoptimized loading="lazy" placeholder="blur" blurDataURL={BLUR_PLACEHOLDER} />
+                    <Image src={src} alt="" fill style={{ objectFit: "cover" }} loading="lazy" />
                   </div>
                 ))}
               </div>

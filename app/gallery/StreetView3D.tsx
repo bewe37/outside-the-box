@@ -84,10 +84,10 @@ function MasonryCard({
           alt={box.title}
           width={600}
           height={h}
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+          quality={75}
           style={{ width: "100%", height: "auto", display: "block", objectFit: "cover", filter: "saturate(1.15)" }}
           loading="lazy"
-          placeholder="blur"
-          blurDataURL={BLUR_PLACEHOLDER}
         />
 
 
