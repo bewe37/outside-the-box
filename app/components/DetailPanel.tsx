@@ -40,6 +40,7 @@ export function DetailPanel({
   const photos = box.images ?? [];
   const heroSrc = userPhoto ?? photos[0] ?? "";
   const [aspect, setAspect] = useState<number | null>(null);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +65,7 @@ export function DetailPanel({
 
   React.useEffect(() => {
     setAspect(null);
+    setHeroLoaded(false);
     if (!heroSrc) return;
     const img = new window.Image();
     img.onload = () => {
@@ -145,12 +147,14 @@ export function DetailPanel({
             style={{ position: "relative", width: "100%", height: HERO_H, cursor: "zoom-in" }}
             onClick={() => setLightboxIndex(0)}
           >
+            {!heroLoaded && <div className="img-shimmer" style={{ position: "absolute", inset: 0, zIndex: 1 }} />}
             <Image
               src={heroSrc}
               alt={box.title}
               fill
-              style={{ objectFit: isLandscape ? "cover" : "contain" }}
+              style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease" }}
               priority
+              onLoad={() => setHeroLoaded(true)}
             />
           </div>
           {onSwapPhoto && (
