@@ -292,16 +292,11 @@ function CollectionView({
 
 // ─── Empty Collection ─────────────────────────────────────────────────────────
 
-type BoxMood = "happy" | "curious" | "surprised" | "skeptical";
-
-const MOODS: BoxMood[] = ["happy", "curious", "surprised", "skeptical"];
-
 function EmptyCollection() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [ready, setReady] = useState(false);
   const [blinking, setBlinking] = useState(false);
-  const [mood, setMood] = useState<BoxMood>("happy");
 
   useEffect(() => {
     setReady(true);
@@ -336,61 +331,15 @@ function EmptyCollection() {
   }, []);
   const blinkTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Mood changes — drift through expressions every 4–9s
-  useEffect(() => {
-    function scheduleMood() {
-      const delay = 4000 + Math.random() * 5000;
-      return setTimeout(() => {
-        setMood(MOODS[Math.floor(Math.random() * MOODS.length)]);
-        moodTimer.current = scheduleMood();
-      }, delay);
-    }
-    const id = scheduleMood();
-    moodTimer.current = id;
-    return () => clearTimeout(moodTimer.current);
-  }, []);
-  const moodTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-
   const MAX = 5;
   const px = mouse.x * MAX;
   const py = mouse.y * MAX;
 
   const BOX_W = 120;
   const BOX_H = Math.round(BOX_W * 1251 / 883);
-
-  // Eye geometry varies by mood
-  const eyeRadius = mood === "surprised" ? 11 : 8;
-  const PUPIL_R = mood === "surprised" ? 4.5 : mood === "skeptical" ? 3 : 3.5;
+  const EYE_R = 8;
+  const PUPIL_R = 3.5;
   const HIGHLIGHT_R = 1.2;
-
-  // Mouth path varies by mood
-  function mouthPath() {
-    const cx = BOX_W * 0.50;
-    const my = BOX_H * 0.45;
-    if (mood === "happy") {
-      return `M ${BOX_W * 0.42} ${my} Q ${cx} ${BOX_H * 0.475} ${BOX_W * 0.58} ${my}`;
-    }
-    if (mood === "curious") {
-      // Slight open-mouth "o"
-      return `M ${cx - 5} ${my + 1} Q ${cx} ${my + 7} ${cx + 5} ${my + 1}`;
-    }
-    if (mood === "surprised") {
-      // Bigger "O" — rendered as ellipse below
-      return null;
-    }
-    // skeptical — flat line, slightly asymmetric
-    return `M ${BOX_W * 0.42} ${my + 2} L ${BOX_W * 0.55} ${my + 1}`;
-  }
-
-  // Eyelid squint for skeptical — draws over top half of eye
-  function eyelidClip(ex: number) {
-    const ey = BOX_H * 0.37;
-    const r = eyeRadius;
-    if (mood === "skeptical") {
-      return `M ${BOX_W * ex - r} ${ey} A ${r} ${r} 0 0 1 ${BOX_W * ex + r} ${ey} Z`;
-    }
-    return null;
-  }
 
   return (
     <div
@@ -407,7 +356,7 @@ function EmptyCollection() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/BeforeLoading.svg" alt="" style={{ width: "100%", height: "100%", display: "block" }} />
 
-        {/* Eyes + expression overlay */}
+        {/* Eyes overlay — positioned on the grey face of the box */}
         {ready && (
           <svg
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
@@ -415,44 +364,28 @@ function EmptyCollection() {
           >
             {[0.35, 0.65].map((ex, i) => {
               const ey = BOX_H * 0.37;
-              const r = eyeRadius;
-              const squint = eyelidClip(ex);
               return (
                 <g key={i}>
                   {blinking ? (
-                    // Closed eye — flat ellipse
-                    <ellipse cx={BOX_W * ex} cy={ey} rx={r} ry={1.5} fill="#D0D0D0" />
+                    <ellipse cx={BOX_W * ex} cy={ey} rx={EYE_R} ry={1.5} fill="#D0D0D0" />
                   ) : (
                     <>
-                      <circle cx={BOX_W * ex} cy={ey} r={r} fill="#FFFFFF" stroke="#D0D0D0" strokeWidth={0.5} />
+                      <circle cx={BOX_W * ex} cy={ey} r={EYE_R} fill="#FFFFFF" stroke="#D0D0D0" strokeWidth={0.5} />
                       <circle cx={BOX_W * ex + px} cy={ey + py} r={PUPIL_R} fill="#10100F" />
                       <circle cx={BOX_W * ex + px + 1.2} cy={ey + py - 1.5} r={HIGHLIGHT_R} fill="#FFFFFF" />
-                      {/* Skeptical squint covers top half of eye */}
-                      {squint && <path d={squint} fill="#D8D8D8" />}
                     </>
                   )}
                 </g>
               );
             })}
-
-            {/* Mouth */}
-            {mood === "surprised" ? (
-              <ellipse
-                cx={BOX_W * 0.50}
-                cy={BOX_H * 0.455}
-                rx={5}
-                ry={6}
-                fill="#9A9A9A"
-              />
-            ) : (
-              <path
-                d={mouthPath() ?? ""}
-                stroke="#9A9A9A"
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                fill="none"
-              />
-            )}
+            {/* Tiny smile */}
+            <path
+              d={`M ${BOX_W * 0.42} ${BOX_H * 0.45} Q ${BOX_W * 0.50} ${BOX_H * 0.475} ${BOX_W * 0.58} ${BOX_H * 0.45}`}
+              stroke="#9A9A9A"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              fill="none"
+            />
           </svg>
         )}
       </motion.div>
