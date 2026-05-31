@@ -123,17 +123,7 @@ export default function CollectionPage() {
   }
 
   if (collectedBoxes.length === 0) {
-    return (
-      <div style={{ ...centeredFlex, flexDirection: "column", gap: 20 }}>
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" style={{ opacity: 0.18 }}>
-          <rect x="6" y="6" width="20" height="20" rx="2" stroke="#202020" strokeWidth="1.5" />
-          <path d="M11 16h10M16 11v10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-        <p style={emptyLabel}>Nothing collected yet</p>
-        <Link href="/gallery" style={ctaButton}>Browse the gallery →</Link>
-        <button onClick={signOut} style={signOutButton}>Sign out</button>
-      </div>
-    );
+    return <EmptyCollection onSignOut={signOut} />;
   }
 
   return (
@@ -233,12 +223,12 @@ function CollectionView({
         {showShareModal && (
           <>
             <motion.div key="share-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={() => setShowShareModal(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 30 }} />
-            <motion.div key="share-panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: "50%", left: "50%", translate: "-50% -50%", zIndex: 31, width: "min(400px, calc(100vw - 32px))", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", padding: 24, fontFamily: '"Geist", system-ui, sans-serif', display: "flex", flexDirection: "column", gap: 16 }}>
+            <motion.div key="share-panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: "50%", left: "50%", translate: "-50% -50%", zIndex: 31, width: "min(420px, calc(100vw - 32px))", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", padding: 28, fontFamily: '"Geist", system-ui, sans-serif', display: "flex", flexDirection: "column", gap: 16 }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <div>
-                  <p style={{ margin: "0 0 4px", fontSize: size.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: "#202020", fontWeight: 500 }}>Share your collection</p>
-                  <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Anyone with the link can view your collection</p>
+                  <p style={{ margin: "0 0 6px", fontSize: size.body, letterSpacing: tracking.normal, color: "#202020", fontWeight: 500 }}>Share your collection</p>
+                  <p style={{ margin: 0, fontSize: size.meta, letterSpacing: tracking.normal, color: "#AAAAAA" }}>Anyone with the link can view your collection</p>
                 </div>
                 <button onClick={() => setShowShareModal(false)} className="close-btn" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, lineHeight: 1, flexShrink: 0, marginLeft: 12 }}>
                   <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -248,20 +238,20 @@ function CollectionView({
               </div>
               {username ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #E8E8E8", padding: "8px 12px" }}>
-                    <span style={{ fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", fontFamily: "inherit" }}>/collection/{username}</span>
-                    <button onClick={copyLink} style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: copied ? "#AAAAAA" : "#202020", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, transition: "color 0.15s ease" }}>{copied ? "Copied" : "Copy"}</button>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", border: "1px solid #E8E8E8", padding: "10px 14px" }}>
+                    <span style={{ fontSize: size.meta, letterSpacing: tracking.normal, color: "#202020", fontFamily: "inherit" }}>/collection/{username}</span>
+                    <button onClick={copyLink} style={{ fontSize: size.meta, letterSpacing: tracking.normal, color: copied ? "#AAAAAA" : "#202020", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, transition: "color 0.15s ease", marginLeft: 12, flexShrink: 0 }}>{copied ? "Copied" : "Copy"}</button>
                   </div>
                   <button onClick={() => { setUsernameInput(username); setUsername(null); }} style={signOutButton}>Change username</button>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Choose a username for your public link</p>
+                  <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.normal, color: "#AAAAAA" }}>Choose a username for your public link</p>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <input value={usernameInput} onChange={(e) => { setUsernameInput(e.target.value); setUsernameError(""); }} onKeyDown={(e) => { if (e.key === "Enter") saveUsername(); }} placeholder="e.g. alex" style={{ flex: 1, border: "1px solid #E8E8E8", padding: "8px 10px", fontSize: size.caption, letterSpacing: tracking.loose, fontFamily: "inherit", outline: "none", borderColor: usernameError ? "#E05252" : "#E8E8E8" }} />
-                    <button onClick={saveUsername} disabled={usernameLoading || !usernameInput.trim()} style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", fontFamily: "inherit", color: "#FFFFFF", background: "#202020", border: "none", padding: "8px 16px", cursor: usernameLoading ? "default" : "pointer", opacity: usernameLoading || !usernameInput.trim() ? 0.4 : 1 }}>{usernameLoading ? "…" : "Save"}</button>
+                    <input value={usernameInput} onChange={(e) => { setUsernameInput(e.target.value); setUsernameError(""); }} onKeyDown={(e) => { if (e.key === "Enter") saveUsername(); }} placeholder="e.g. alex" style={{ flex: 1, border: "1px solid #E8E8E8", padding: "10px 12px", fontSize: size.meta, letterSpacing: tracking.normal, fontFamily: "inherit", outline: "none", borderColor: usernameError ? "#E05252" : "#E8E8E8" }} />
+                    <button onClick={saveUsername} disabled={usernameLoading || !usernameInput.trim()} style={{ fontSize: size.caption, letterSpacing: tracking.normal, fontFamily: "inherit", color: "#FFFFFF", background: "#202020", border: "none", padding: "10px 18px", cursor: usernameLoading ? "default" : "pointer", opacity: usernameLoading || !usernameInput.trim() ? 0.4 : 1 }}>{usernameLoading ? "…" : "Save"}</button>
                   </div>
-                  {usernameError && <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#E05252" }}>{usernameError}</p>}
+                  {usernameError && <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.normal, color: "#E05252" }}>{usernameError}</p>}
                 </div>
               )}
             </motion.div>
@@ -296,6 +286,113 @@ function CollectionView({
           );
         })()}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Empty Collection ─────────────────────────────────────────────────────────
+
+const POLAROIDS = [
+  { title: "VILLAGE RAINBOW",                    img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779841152306-9jml93wwjfk.jpg",   x: -28, y: -12, rot: -6  },
+  { title: "GORDON LIGHTFOOT",                   img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844098370-gxe4jzs9n5l.jpg",  x:  22, y: -18, rot:  5  },
+  { title: "DO ANDROIDS DREAM?",                 img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844288985-jmwr654qy8o.jpg",  x: -14, y:  14, rot: -3  },
+  { title: "A BIRD IS SINGING IN MY GARDEN",     img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844500480-12ihue2ad4ro.jpg", x:  32, y:  10, rot:  7  },
+  { title: "THE DANCE",                          img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844644807-mo3d4oaxv9.jpg",   x:   2, y: -28, rot: -1  },
+];
+
+function Polaroid({ title, img, x, y, rot, index }: {
+  title: string; img: string; x: number; y: number; rot: number; index: number;
+}) {
+  const [hovered, setHovered] = useState(false);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 30, rotate: rot }}
+      animate={{ opacity: 1, y: 0, rotate: rot }}
+      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.25, 0.1, 0.25, 1] }}
+      whileHover={{ rotate: 0, scale: 1.06, zIndex: 10 }}
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      style={{
+        position: "absolute",
+        left: `calc(50% + ${x}px)`,
+        top: `calc(50% + ${y}px)`,
+        translate: "-50% -50%",
+        width: 140,
+        background: "#FFFFFF",
+        boxShadow: hovered
+          ? "0 20px 60px rgba(0,0,0,0.18)"
+          : "0 4px 24px rgba(0,0,0,0.10)",
+        padding: "10px 10px 32px",
+        cursor: "default",
+        userSelect: "none",
+        transition: "box-shadow 0.2s ease",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={img} alt={title} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
+      <p style={{
+        margin: "10px 0 0",
+        fontSize: 8,
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        color: "#AAAAAA",
+        textAlign: "center",
+        lineHeight: 1.3,
+        fontFamily: '"Geist", system-ui, sans-serif',
+      }}>
+        {title}
+      </p>
+    </motion.div>
+  );
+}
+
+function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
+  return (
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+      {/* Scattered polaroids */}
+      {POLAROIDS.map((p, i) => (
+        <Polaroid key={p.title} {...p} index={i} />
+      ))}
+
+      {/* Bottom CTA */}
+      <div style={{
+        position: "absolute",
+        bottom: 32,
+        left: "50%",
+        translate: "-50% 0",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 12,
+        zIndex: 20,
+      }}>
+        <Link href="/gallery" style={{
+          fontSize: size.caption,
+          letterSpacing: tracking.label,
+          textTransform: "uppercase",
+          color: "#202020",
+          textDecoration: "none",
+          borderBottom: "1px solid #E8E8E8",
+          paddingBottom: 2,
+          fontFamily: '"Geist", system-ui, sans-serif',
+        }}>
+          Browse the gallery →
+        </Link>
+        <button onClick={onSignOut} style={{
+          fontSize: size.caption,
+          letterSpacing: tracking.loose,
+          textTransform: "uppercase",
+          color: "#CACACA",
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          fontFamily: '"Geist", system-ui, sans-serif',
+          padding: 0,
+        }}>
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }

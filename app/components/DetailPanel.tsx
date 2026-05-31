@@ -268,8 +268,8 @@ export function DetailPanel({
                 className="close-btn"
                 style={{ position: "fixed", top: 20, right: 20, background: "none", border: "none", cursor: "pointer", padding: 8, lineHeight: 1 }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                  <path d="M1 1L15 15M15 1L1 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                 </svg>
               </button>
 
