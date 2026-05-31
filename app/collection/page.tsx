@@ -318,14 +318,11 @@ function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
   const px = mouse.x * MAX;
   const py = mouse.y * MAX;
 
-  // Box renders at ~160px wide, ~226px tall (aspect of SVG: 883/1251)
-  // Eyes are positioned relative to the box image
-  // Left eye center: ~38% x, ~38% y of box face area
-  // Right eye center: ~62% x, ~38% y
-  const BOX_W = 160;
+  const BOX_W = 120;
   const BOX_H = Math.round(BOX_W * 1251 / 883);
-  const EYE_R = 9;   // outer eye radius
-  const PUPIL_R = 4; // pupil radius
+  const EYE_R = 8;
+  const PUPIL_R = 3.5;
+  const HIGHLIGHT_R = 1.2;
 
   return (
     <div
@@ -348,21 +345,26 @@ function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
             viewBox={`0 0 ${BOX_W} ${BOX_H}`}
           >
-            {/* Left eye */}
-            <circle cx={BOX_W * 0.37} cy={BOX_H * 0.40} r={EYE_R} fill="#FFFFFF" />
-            <circle
-              cx={BOX_W * 0.37 + px}
-              cy={BOX_H * 0.40 + py}
-              r={PUPIL_R}
-              fill="#10100F"
-            />
-            {/* Right eye */}
-            <circle cx={BOX_W * 0.63} cy={BOX_H * 0.40} r={EYE_R} fill="#FFFFFF" />
-            <circle
-              cx={BOX_W * 0.63 + px}
-              cy={BOX_H * 0.40 + py}
-              r={PUPIL_R}
-              fill="#10100F"
+            {[0.35, 0.65].map((ex, i) => {
+              const ey = BOX_H * 0.37;
+              return (
+                <g key={i}>
+                  {/* White of eye */}
+                  <circle cx={BOX_W * ex} cy={ey} r={EYE_R} fill="#FFFFFF" stroke="#D0D0D0" strokeWidth={0.5} />
+                  {/* Pupil */}
+                  <circle cx={BOX_W * ex + px} cy={ey + py} r={PUPIL_R} fill="#10100F" />
+                  {/* Cute highlight */}
+                  <circle cx={BOX_W * ex + px + 1.2} cy={ey + py - 1.5} r={HIGHLIGHT_R} fill="#FFFFFF" />
+                </g>
+              );
+            })}
+            {/* Tiny smile */}
+            <path
+              d={`M ${BOX_W * 0.42} ${BOX_H * 0.45} Q ${BOX_W * 0.50} ${BOX_H * 0.475} ${BOX_W * 0.58} ${BOX_H * 0.45}`}
+              stroke="#9A9A9A"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              fill="none"
             />
           </svg>
         )}
