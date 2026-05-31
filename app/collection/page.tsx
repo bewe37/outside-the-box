@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
@@ -292,81 +292,89 @@ function CollectionView({
 
 // ─── Empty Collection ─────────────────────────────────────────────────────────
 
-const POLAROIDS = [
-  { title: "VILLAGE RAINBOW",                    img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779841152306-9jml93wwjfk.jpg",   x: -28, y: -12, rot: -6  },
-  { title: "GORDON LIGHTFOOT",                   img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844098370-gxe4jzs9n5l.jpg",  x:  22, y: -18, rot:  5  },
-  { title: "DO ANDROIDS DREAM?",                 img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844288985-jmwr654qy8o.jpg",  x: -14, y:  14, rot: -3  },
-  { title: "A BIRD IS SINGING IN MY GARDEN",     img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844500480-12ihue2ad4ro.jpg", x:  32, y:  10, rot:  7  },
-  { title: "THE DANCE",                          img: "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779844644807-mo3d4oaxv9.jpg",   x:   2, y: -28, rot: -1  },
-];
-
-function Polaroid({ title, img, x, y, rot, index }: {
-  title: string; img: string; x: number; y: number; rot: number; index: number;
-}) {
-  const [hovered, setHovered] = useState(false);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30, rotate: rot }}
-      animate={{ opacity: 1, y: 0, rotate: rot }}
-      transition={{ duration: 0.5, delay: index * 0.08, ease: [0.25, 0.1, 0.25, 1] }}
-      whileHover={{ rotate: 0, scale: 1.06, zIndex: 10 }}
-      onHoverStart={() => setHovered(true)}
-      onHoverEnd={() => setHovered(false)}
-      style={{
-        position: "absolute",
-        left: `calc(50% + ${x}px)`,
-        top: `calc(50% + ${y}px)`,
-        translate: "-50% -50%",
-        width: 140,
-        background: "#FFFFFF",
-        boxShadow: hovered
-          ? "0 20px 60px rgba(0,0,0,0.18)"
-          : "0 4px 24px rgba(0,0,0,0.10)",
-        padding: "10px 10px 32px",
-        cursor: "default",
-        userSelect: "none",
-        transition: "box-shadow 0.2s ease",
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={img} alt={title} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block" }} />
-      <p style={{
-        margin: "10px 0 0",
-        fontSize: 8,
-        letterSpacing: "0.08em",
-        textTransform: "uppercase",
-        color: "#AAAAAA",
-        textAlign: "center",
-        lineHeight: 1.3,
-        fontFamily: '"Geist", system-ui, sans-serif',
-      }}>
-        {title}
-      </p>
-    </motion.div>
-  );
-}
-
 function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
-  return (
-    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-      {/* Scattered polaroids */}
-      {POLAROIDS.map((p, i) => (
-        <Polaroid key={p.title} {...p} index={i} />
-      ))}
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [mouse, setMouse] = useState({ x: 0, y: 0 });
+  const [ready, setReady] = useState(false);
 
-      {/* Bottom CTA */}
-      <div style={{
-        position: "absolute",
-        bottom: 32,
-        left: "50%",
-        translate: "-50% 0",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 12,
-        zIndex: 20,
-      }}>
+  useEffect(() => {
+    setReady(true);
+    function onMove(e: MouseEvent) {
+      const el = containerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      // Normalize to -1..1 from center of container
+      setMouse({
+        x: ((e.clientX - rect.left) / rect.width  - 0.5) * 2,
+        y: ((e.clientY - rect.top)  / rect.height - 0.5) * 2,
+      });
+    }
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, []);
+
+  // Max pupil travel in px within the eye
+  const MAX = 5;
+  const px = mouse.x * MAX;
+  const py = mouse.y * MAX;
+
+  // Box renders at ~160px wide, ~226px tall (aspect of SVG: 883/1251)
+  // Eyes are positioned relative to the box image
+  // Left eye center: ~38% x, ~38% y of box face area
+  // Right eye center: ~62% x, ~38% y
+  const BOX_W = 160;
+  const BOX_H = Math.round(BOX_W * 1251 / 883);
+  const EYE_R = 9;   // outer eye radius
+  const PUPIL_R = 4; // pupil radius
+
+  return (
+    <div
+      ref={containerRef}
+      style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}
+    >
+      {/* Box with eyes */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+        style={{ position: "relative", width: BOX_W, height: BOX_H, userSelect: "none" }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/BeforeLoading.svg" alt="" style={{ width: "100%", height: "100%", display: "block" }} />
+
+        {/* Eyes overlay — positioned on the grey face of the box */}
+        {ready && (
+          <svg
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
+            viewBox={`0 0 ${BOX_W} ${BOX_H}`}
+          >
+            {/* Left eye */}
+            <circle cx={BOX_W * 0.37} cy={BOX_H * 0.40} r={EYE_R} fill="#FFFFFF" />
+            <circle
+              cx={BOX_W * 0.37 + px}
+              cy={BOX_H * 0.40 + py}
+              r={PUPIL_R}
+              fill="#10100F"
+            />
+            {/* Right eye */}
+            <circle cx={BOX_W * 0.63} cy={BOX_H * 0.40} r={EYE_R} fill="#FFFFFF" />
+            <circle
+              cx={BOX_W * 0.63 + px}
+              cy={BOX_H * 0.40 + py}
+              r={PUPIL_R}
+              fill="#10100F"
+            />
+          </svg>
+        )}
+      </motion.div>
+
+      {/* CTA */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
+      >
         <Link href="/gallery" style={{
           fontSize: size.caption,
           letterSpacing: tracking.label,
@@ -392,7 +400,7 @@ function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
         }}>
           Sign out
         </button>
-      </div>
+      </motion.div>
     </div>
   );
 }
