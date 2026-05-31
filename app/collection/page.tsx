@@ -375,7 +375,7 @@ function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
       >
         <Link href="/gallery" style={{
           fontSize: size.caption,
@@ -383,26 +383,29 @@ function EmptyCollection({ onSignOut }: { onSignOut: () => void }) {
           textTransform: "uppercase",
           color: "#202020",
           textDecoration: "none",
-          borderBottom: "1px solid #E8E8E8",
-          paddingBottom: 2,
           fontFamily: '"Geist", system-ui, sans-serif',
         }}>
           Browse the gallery →
         </Link>
-        <button onClick={onSignOut} style={{
-          fontSize: size.caption,
-          letterSpacing: tracking.loose,
-          textTransform: "uppercase",
-          color: "#CACACA",
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          fontFamily: '"Geist", system-ui, sans-serif',
-          padding: 0,
-        }}>
-          Sign out
-        </button>
       </motion.div>
+
+      {/* Sign out — bottom right */}
+      <button onClick={onSignOut} style={{
+        position: "absolute",
+        bottom: 20,
+        right: 20,
+        fontSize: size.caption,
+        letterSpacing: tracking.loose,
+        textTransform: "uppercase",
+        color: "#CACACA",
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        fontFamily: '"Geist", system-ui, sans-serif',
+        padding: 0,
+      }}>
+        Sign out
+      </button>
     </div>
   );
 }
