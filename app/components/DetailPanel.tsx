@@ -104,7 +104,6 @@ export function DetailPanel({
       <div
         style={{
           width: PANEL_W,
-          height: PANEL_H,
           maxHeight: isMobile ? "100dvh" : "calc(100vh - 120px)",
           boxSizing: "border-box",
           paddingTop: 16,
@@ -119,7 +118,7 @@ export function DetailPanel({
           fontFamily: '"Geist", system-ui, sans-serif',
           color: "#202020",
           fontWeight: 400,
-          overflow: "hidden",
+          overflowY: "auto",
         }}
       >
         {/* Caption + title + close */}
@@ -133,8 +132,8 @@ export function DetailPanel({
             </span>
           </div>
           {onClose && (
-            <button onClick={onClose} className="close-btn" style={{ background: "none", border: "none", cursor: "pointer", padding: isMobile ? 8 : 4, flexShrink: 0, lineHeight: 1, fontFamily: "inherit" }}>
-              <svg width={isMobile ? 14 : 10} height={isMobile ? 14 : 10} viewBox="0 0 10 10" fill="none">
+            <button onClick={onClose} className="close-btn" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, lineHeight: 1, fontFamily: "inherit" }}>
+              <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
                 <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </button>
@@ -183,7 +182,7 @@ export function DetailPanel({
         </div>
 
         {/* Metadata */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, overflowY: "auto", minHeight: 0, paddingInline: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingInline: 16 }}>
           <MetaRow label="Artist" value={box.artist} labelW={labelW} />
           <MetaRow label="Year" value={formatYear(box.year)} labelW={labelW} />
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
