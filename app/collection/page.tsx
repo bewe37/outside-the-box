@@ -355,7 +355,7 @@ function BoxState({ label, children }: { label: string; children: React.ReactNod
   return (
     <div
       ref={containerRef}
-      style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}
+      style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 20 }}
     >
       <motion.div
         initial={{ opacity: 0, y: 16 }}
@@ -401,7 +401,7 @@ function BoxState({ label, children }: { label: string; children: React.ReactNod
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
       >
         <p style={emptyLabel}>{label}</p>
         {children}
@@ -446,8 +446,8 @@ const emptyLabel: React.CSSProperties = {
 const ctaButton: React.CSSProperties = {
   fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.label,
   fontWeight: weight.medium, textTransform: "uppercase", color: "#202020",
-  background: "none", border: "none", borderBottom: "1px solid #E8E8E8",
-  paddingBottom: 2, cursor: "pointer", fontFamily: "inherit", textDecoration: "none",
+  background: "none", border: "none",
+  cursor: "pointer", fontFamily: "inherit", textDecoration: "none",
 };
 
 const signOutButton: React.CSSProperties = {
