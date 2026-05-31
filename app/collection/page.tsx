@@ -115,15 +115,27 @@ export default function CollectionPage() {
 
   if (!user) {
     return (
-      <div style={{ ...centeredFlex, flexDirection: "column", gap: 28 }}>
-        <p style={emptyLabel}>Sign in to track your collection</p>
+      <BoxState label="Sign in to start your collection">
         <button onClick={signIn} style={ctaButton}>Sign in with Google →</button>
-      </div>
+      </BoxState>
     );
   }
 
   if (collectedBoxes.length === 0) {
-    return <EmptyCollection />;
+    return (
+      <BoxState label="Your collection is empty">
+        <Link href="/gallery" style={{
+          fontSize: size.caption,
+          letterSpacing: tracking.label,
+          textTransform: "uppercase",
+          color: "#202020",
+          textDecoration: "none",
+          fontFamily: '"Geist", system-ui, sans-serif',
+        }}>
+          Browse the gallery →
+        </Link>
+      </BoxState>
+    );
   }
 
   return (
@@ -290,9 +302,9 @@ function CollectionView({
   );
 }
 
-// ─── Empty Collection ─────────────────────────────────────────────────────────
+// ─── Box State (sign-in + empty collection) ───────────────────────────────────
 
-function EmptyCollection() {
+function BoxState({ label, children }: { label: string; children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [ready, setReady] = useState(false);
@@ -313,7 +325,6 @@ function EmptyCollection() {
     return () => window.removeEventListener("mousemove", onMove);
   }, []);
 
-  // Blinking — random interval between 2–6s, blink lasts 120ms
   useEffect(() => {
     function scheduleBlink() {
       const delay = 2000 + Math.random() * 4000;
@@ -346,7 +357,6 @@ function EmptyCollection() {
       ref={containerRef}
       style={{ position: "relative", width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 32 }}
     >
-      {/* Box with eyes */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
@@ -355,8 +365,6 @@ function EmptyCollection() {
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/BeforeLoading.svg" alt="" style={{ width: "100%", height: "100%", display: "block" }} />
-
-        {/* Eyes overlay — positioned on the grey face of the box */}
         {ready && (
           <svg
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible", pointerEvents: "none" }}
@@ -378,7 +386,6 @@ function EmptyCollection() {
                 </g>
               );
             })}
-            {/* Tiny smile */}
             <path
               d={`M ${BOX_W * 0.42} ${BOX_H * 0.45} Q ${BOX_W * 0.50} ${BOX_H * 0.475} ${BOX_W * 0.58} ${BOX_H * 0.45}`}
               stroke="#9A9A9A"
@@ -390,25 +397,15 @@ function EmptyCollection() {
         )}
       </motion.div>
 
-      {/* CTA */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, delay: 0.2 }}
-        style={{ display: "flex", flexDirection: "column", alignItems: "center" }}
+        style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}
       >
-        <Link href="/gallery" style={{
-          fontSize: size.caption,
-          letterSpacing: tracking.label,
-          textTransform: "uppercase",
-          color: "#202020",
-          textDecoration: "none",
-          fontFamily: '"Geist", system-ui, sans-serif',
-        }}>
-          Browse the gallery →
-        </Link>
+        <p style={emptyLabel}>{label}</p>
+        {children}
       </motion.div>
-
     </div>
   );
 }
