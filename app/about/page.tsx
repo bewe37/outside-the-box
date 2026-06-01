@@ -82,7 +82,8 @@ export default function AboutPage() {
       `;
 
       const img = document.createElement("img");
-      img.src = src;
+      // Request a small optimized version — trail cards are only 72px wide
+      img.src = `/_next/image?url=${encodeURIComponent(src)}&w=128&q=60`;
       img.style.cssText = `
         width: 100%;
         height: 100%;
@@ -130,60 +131,61 @@ export default function AboutPage() {
     >
       <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
-        {/* Sections */}
+        {/* Content — pinned to right ~45% */}
         <div
           className="about-sections"
           style={{
             position: "absolute",
-            top: "46%",
-            left: "42%",
-            translate: "-50% -50%",
+            top: "50%",
+            right: 32,
+            translate: "0 -50%",
             zIndex: 10,
+            width: "min(420px, calc(100vw - 48px))",
+            display: "flex",
+            flexDirection: "column",
+            gap: 0,
           }}
         >
-          <Section indent={0} label="About">
-            Toronto is covered in painted utility boxes — electrical cabinets, traffic
-            control pedestals, telecom enclosures — wrapped in murals by local artists.
-            Most people walk past them every day without stopping. This is my attempt
-            to document them: where they are, who made them, and when. Not exhaustive,
-            not official. Just one person paying attention.
-          </Section>
+          <InfoRow label="About">
+            Toronto&apos;s painted utility boxes are everywhere. Most people walk past
+            them. This is my attempt to document them: where they are, who made them,
+            and when.
+          </InfoRow>
 
-          <Section indent={1} label="How I collect">
-            Every box here is one I&apos;ve found and photographed myself, on foot. I
-            shoot with my phone, record the address and neighbourhood, and track down
-            the artist credit where I can — from signage on the box, city program
-            listings, or the artist&apos;s own social media. Some boxes have no
-            credit at all; I note that too rather than guess.
-          </Section>
+          <InfoRow label="How I collect">
+            Every box is one I&apos;ve found and photographed myself, on foot.
+            I track down artist credits from signage, city listings, or social media.
+            If there&apos;s no credit, I say so rather than guess.
+          </InfoRow>
 
-          <Section indent={2} label="Finding them">
-            The easiest rule: look for red lights. Nearly every signalised intersection
-            in Toronto has a utility box on the corner, and many of them are painted.
-            If you&apos;re walking through Leslieville, Parkdale, Kensington, or
-            Trinity Bellwoods — slow down at the corners and you&apos;ll start seeing
-            them everywhere.
-          </Section>
+          <InfoRow label="Finding them">
+            Look for red lights. Nearly every signalised corner in Toronto has a utility
+            box, and many are painted. Slow down in Leslieville, Parkdale, Kensington,
+            or Trinity Bellwoods and you&apos;ll start seeing them everywhere.
+          </InfoRow>
 
-          <Section indent={3} label="Seen one I missed?">
-            If you&apos;ve spotted a box that isn&apos;t in the archive — or you have
-            a better photo, a correction to an artist credit, or just want to say
-            hello — I&apos;d genuinely love to hear about it. Send me the address and
-            a photo.
-            <br /><br />
+          <InfoRow label="Seen one I missed?">
+            Spotted a box not in the archive, or have a better photo? Send me the
+            address and I&apos;d love to hear about it.
+          </InfoRow>
+
+          {/* Email row */}
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            paddingTop: 24,
+          }}>
+            <span style={{ fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>
+              Email
+            </span>
             <a
               href="mailto:bryanwinata112@gmail.com"
-              style={{
-                color: "#202020",
-                letterSpacing: tracking.normal,
-                textDecoration: "none",
-                borderBottom: "1px solid #202020",
-                paddingBottom: 1,
-              }}
+              style={{ fontSize: size.body, lineHeight: leading.body, letterSpacing: tracking.normal, color: "#202020", textDecoration: "none" }}
             >
               bryanwinata112@gmail.com
             </a>
-          </Section>
+          </div>
         </div>
 
         {/* Made by — bottom-right */}
@@ -235,47 +237,31 @@ export default function AboutPage() {
   );
 }
 
-const INDENT_STEP = 140;
-
-function Section({
-  indent,
-  label,
-  children,
-}: {
-  indent: number;
-  label: string;
-  children: React.ReactNode;
-}) {
+function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        marginLeft: indent * INDENT_STEP,
-        marginTop: indent === 0 ? 0 : 52,
-        maxWidth: 560,
-      }}
-    >
-      <div
-        style={{
-          fontSize: size.caption,
-          lineHeight: leading.caption,
-          letterSpacing: tracking.loose,
-          textTransform: "uppercase",
-          color: "#202020",
-          marginBottom: 10,
-        }}
-      >
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      paddingBottom: 28,
+    }}>
+      <span style={{
+        fontSize: size.caption,
+        lineHeight: leading.caption,
+        letterSpacing: tracking.loose,
+        textTransform: "uppercase",
+        color: "#202020",
+        marginBottom: 10,
+      }}>
         {label}
-      </div>
-      <div
-        style={{
-          fontSize: size.body,
-          lineHeight: leading.body,
-          letterSpacing: tracking.normal,
-          color: "#202020",
-        }}
-      >
+      </span>
+      <span style={{
+        fontSize: size.body,
+        lineHeight: leading.body,
+        letterSpacing: tracking.normal,
+        color: "#202020",
+      }}>
         {children}
-      </div>
+      </span>
     </div>
   );
 }

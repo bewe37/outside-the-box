@@ -142,7 +142,7 @@ function MasonryCard({
           transition: "max-height 0.32s ease, opacity 0.22s ease",
         }}
       >
-        <div style={{ padding: "10px 2px 12px" }}>
+        <div style={{ padding: "10px 2px 0px" }}>
           <div
             style={{
               fontSize: size.meta,
@@ -235,7 +235,7 @@ export default function MasonryView({
           <div
             key={box.id}
             ref={(el) => { cardRefs.current[i] = el; }}
-            style={{ breakInside: "avoid", marginBottom: 20 }}
+            style={{ breakInside: "avoid", marginBottom: 22 }}
           >
             <MasonryCard
               box={box}

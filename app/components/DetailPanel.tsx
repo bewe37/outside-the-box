@@ -104,7 +104,7 @@ export function DetailPanel({
       <div
         style={{
           width: PANEL_W,
-          maxHeight: isMobile ? "100dvh" : "calc(100vh - 120px)",
+          height: isMobile ? "100dvh" : "min(820px, calc(100vh - 120px))",
           boxSizing: "border-box",
           paddingTop: 16,
           paddingBottom: 16,
@@ -118,7 +118,7 @@ export function DetailPanel({
           fontFamily: '"Geist", system-ui, sans-serif',
           color: "#202020",
           fontWeight: 400,
-          overflowY: "auto",
+          overflow: "hidden",
         }}
       >
         {/* Caption + title + close */}
@@ -182,7 +182,7 @@ export function DetailPanel({
         </div>
 
         {/* Metadata */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingInline: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, overflowY: "auto", minHeight: 0, paddingInline: 16 }}>
           <MetaRow label="Artist" value={box.artist} labelW={labelW} />
           <MetaRow label="Year" value={formatYear(box.year)} labelW={labelW} />
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>

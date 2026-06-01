@@ -1026,8 +1026,23 @@ function GalleryControls({
   onNeighbourhoodsChange: (s: Set<string>) => void;
 }) {
   const [showFilter, setShowFilter] = useState(false);
+  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!showFilter) return;
+    let raf: number;
+    function track() {
+      if (btnRef.current) {
+        const r = btnRef.current.getBoundingClientRect();
+        setFilterPos({ top: r.bottom + 6, left: r.left + r.width / 2 });
+      }
+      raf = requestAnimationFrame(track);
+    }
+    raf = requestAnimationFrame(track);
+    return () => cancelAnimationFrame(raf);
+  }, [showFilter]);
 
   function toggle(n: string) {
     const next = new Set(activeNeighbourhoods);
@@ -1100,7 +1115,19 @@ function GalleryControls({
             ref={panelRef}
             initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{ position: "fixed", top: 44, right: 16, zIndex: 200, background: "#FFFFFF", border: "1px solid #E8E8E8", boxShadow: "0 8px 32px rgba(0,0,0,0.08)", padding: "6px 0", minWidth: 160, fontFamily: '"Geist", system-ui, sans-serif' }}
+            style={{
+              position: "fixed",
+              top: filterPos?.top ?? 44,
+              left: filterPos ? filterPos.left : "50%",
+              translate: "-50%",
+              zIndex: 200,
+              background: "#FFFFFF",
+              border: "1px solid #E8E8E8",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+              padding: "6px 0",
+              minWidth: 160,
+              fontFamily: '"Geist", system-ui, sans-serif',
+            }}
           >
             <div style={{ padding: "4px 12px 6px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Neighbourhood</div>
             {neighbourhoods.map((n) => {

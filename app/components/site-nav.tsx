@@ -75,14 +75,7 @@ export function SiteNav() {
         OutsideTheBox
       </Link>
 
-      {/* Center links — desktop: absolutely centered; mobile: moved to right */}
-      <div className="nav-page-links">
-        {links.map(({ href, label }) => (
-          <NavPageLink key={href} href={href} label={label} active={pathname === href} />
-        ))}
-      </div>
-
-      {/* Right slot — desktop: right edge; mobile: center */}
+      {/* Center slot — grid/filter/index controls */}
       <div className="nav-right-slot" style={{ color: "#202020" }}>
         <AnimatePresence mode="wait">
           {right && (
@@ -97,6 +90,13 @@ export function SiteNav() {
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Nav links — right */}
+      <div className="nav-page-links">
+        {links.map(({ href, label }) => (
+          <NavPageLink key={href} href={href} label={label} active={pathname === href} />
+        ))}
       </div>
     </div>
   );

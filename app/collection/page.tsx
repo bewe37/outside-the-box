@@ -308,7 +308,8 @@ function BoxState({ label, children }: { label: string; children: React.ReactNod
   const containerRef = useRef<HTMLDivElement>(null);
   const [mouse, setMouse] = useState({ x: 0, y: 0 });
   const [ready, setReady] = useState(false);
-  const [blinking, setBlinking] = useState(false);
+  // eyeScale: 1 = open, 0 = closed
+  const [eyeScale, setEyeScale] = useState(1);
 
   useEffect(() => {
     setReady(true);
@@ -326,18 +327,30 @@ function BoxState({ label, children }: { label: string; children: React.ReactNod
   }, []);
 
   useEffect(() => {
+    function doBlink(onDone: () => void) {
+      // close fast (60ms), open slower (160ms)
+      setEyeScale(0);
+      setTimeout(() => {
+        setEyeScale(1);
+        setTimeout(onDone, 160);
+      }, 60);
+    }
+
     function scheduleBlink() {
       const delay = 2000 + Math.random() * 4000;
-      return setTimeout(() => {
-        setBlinking(true);
-        setTimeout(() => {
-          setBlinking(false);
-          blinkTimer.current = scheduleBlink();
-        }, 120);
+      blinkTimer.current = setTimeout(() => {
+        const doDouble = Math.random() < 0.25;
+        doBlink(() => {
+          if (doDouble) {
+            setTimeout(() => doBlink(() => { scheduleBlink(); }), 120);
+          } else {
+            scheduleBlink();
+          }
+        });
       }, delay);
     }
-    const id = scheduleBlink();
-    blinkTimer.current = id;
+
+    scheduleBlink();
     return () => clearTimeout(blinkTimer.current);
   }, []);
   const blinkTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -372,17 +385,14 @@ function BoxState({ label, children }: { label: string; children: React.ReactNod
           >
             {[0.35, 0.65].map((ex, i) => {
               const ey = BOX_H * 0.37;
+              const cx = BOX_W * ex;
+              // transition differs on close vs open so we key off eyeScale
+              const transitionDuration = eyeScale === 0 ? "60ms" : "160ms";
               return (
-                <g key={i}>
-                  {blinking ? (
-                    <ellipse cx={BOX_W * ex} cy={ey} rx={EYE_R} ry={1.5} fill="#D0D0D0" />
-                  ) : (
-                    <>
-                      <circle cx={BOX_W * ex} cy={ey} r={EYE_R} fill="#FFFFFF" stroke="#D0D0D0" strokeWidth={0.5} />
-                      <circle cx={BOX_W * ex + px} cy={ey + py} r={PUPIL_R} fill="#10100F" />
-                      <circle cx={BOX_W * ex + px + 1.2} cy={ey + py - 1.5} r={HIGHLIGHT_R} fill="#FFFFFF" />
-                    </>
-                  )}
+                <g key={i} style={{ transformOrigin: `${cx}px ${ey}px`, transform: `scaleY(${eyeScale})`, transition: `transform ${transitionDuration} ease-in-out` }}>
+                  <circle cx={cx} cy={ey} r={EYE_R} fill="#FFFFFF" stroke="#D0D0D0" strokeWidth={0.5} />
+                  <circle cx={cx + px} cy={ey + py} r={PUPIL_R} fill="#10100F" />
+                  <circle cx={cx + px + 1.2} cy={ey + py - 1.5} r={HIGHLIGHT_R} fill="#FFFFFF" />
                 </g>
               );
             })}

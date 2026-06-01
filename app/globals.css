@@ -69,10 +69,6 @@ input[type="range"].col-slider::-moz-range-thumb {
 .nav-page-links {
   display: flex;
   gap: 8px;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
 }
 .nav-page-links a {
   transition: color 0.15s ease;
@@ -80,8 +76,15 @@ input[type="range"].col-slider::-moz-range-thumb {
 .nav-page-links a:hover {
   color: #202020 !important;
 }
+
+.nav-right-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+}
 @media (max-width: 640px) {
-  .nav-page-links {
+  .nav-right-slot {
     position: static !important;
     translate: none !important;
   }
@@ -162,7 +165,7 @@ input[type="range"].col-slider::-moz-range-thumb {
 /* ─── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   /* Nav */
-  .nav-right-slot { display: none !important; }
+  .nav-page-links { display: none !important; }
 
   /* Collect button — always visible on mobile (no hover state) */
   .collect-btn-wrap {
