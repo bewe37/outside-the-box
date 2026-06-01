@@ -229,13 +229,14 @@ export default function MasonryView({
   }, [columns]);
 
   return (
-    <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 20, paddingTop: 48 }}>
-      <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 20 }}>
+    <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 32, paddingTop: 64 }}>
+      <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 28 }}>
         {boxes.map((box, i) => (
           <div
             key={box.id}
             ref={(el) => { cardRefs.current[i] = el; }}
-            style={{ breakInside: "avoid", marginBottom: 22 }}
+            className="masonry-card"
+            style={{ breakInside: "avoid", marginBottom: 28 }}
           >
             <MasonryCard
               box={box}

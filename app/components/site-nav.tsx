@@ -54,13 +54,14 @@ export function SiteNav() {
 
   return (
     <div
+      className="site-nav"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
-        height: 48,
+        height: 64,
         boxSizing: "border-box",
-        paddingInline: 16,
+        paddingInline: 32,
         position: "fixed",
         top: 0,
         left: 0,

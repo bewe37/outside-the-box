@@ -15,7 +15,7 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
-  font-weight: 500;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -160,12 +160,14 @@ input[type="range"].col-slider::-moz-range-thumb {
 }
 
 /* Nav height token for filter dropdown alignment */
-:root { --nav-h: 48px; }
+:root { --nav-h: 64px; }
 
 /* ─── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   /* Nav */
-  .nav-page-links { display: none !important; }
+  .nav-page-links { display: flex !important; }
+  .site-nav { padding-inline: 16px !important; height: 48px !important; }
+  .nav-right-slot { display: none !important; }
 
   /* Collect button — always visible on mobile (no hover state) */
   .collect-btn-wrap {
@@ -180,16 +182,21 @@ input[type="range"].col-slider::-moz-range-thumb {
   .index-thumb { display: block !important; }
   .index-date { display: block !important; }
 
-  /* Grid view — force 2 columns on mobile */
-  .masonry-grid { column-count: 2 !important; }
+  /* Grid view — force 2 columns on mobile, tighter gaps */
+  .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
+  .masonry-card { margin-bottom: 12px !important; }
+  .photos-scroll { padding: 12px !important; padding-top: 56px !important; }
 
   /* About page — stack sections normally, no indent */
   .about-sections {
     position: relative !important;
     top: auto !important;
     left: auto !important;
+    right: auto !important;
     translate: none !important;
+    width: 100% !important;
     padding: 64px 20px 80px !important;
+    box-sizing: border-box !important;
     overflow-y: auto !important;
     max-height: 100% !important;
   }
@@ -198,9 +205,8 @@ input[type="range"].col-slider::-moz-range-thumb {
   }
 
   /* About title — hide on mobile since sections are in flow */
-  .about-title {
-    display: none !important;
-  }
+  .about-title { display: none !important; }
+  .about-credit { right: auto !important; left: 20px !important; }
 
   /* Lightbox — true full screen on mobile */
   .lightbox-modal {

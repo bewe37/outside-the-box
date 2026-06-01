@@ -227,9 +227,7 @@ export default function GalleryPage() {
               style={{
                 position: "fixed",
                 inset: 0,
-                backgroundColor: "rgba(255, 255, 255, 0.85)",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
+                backgroundColor: "#FFFFFF",
                 zIndex: 50,
                 cursor: "default",
               }}
@@ -347,7 +345,8 @@ function IndexView({
         flex: 1,
         position: "relative",
         overflowY: "auto",
-        paddingTop: 48,
+        paddingTop: 64,
+        paddingInline: 32,
       }}
     >
       {boxes.map((box, i) => (
@@ -442,18 +441,19 @@ function IndexRow({
         paddingInline: 0,
         background: "none",
         border: "none",
-        borderBottom: "1px solid #F0F0F0",
+        borderBottom: "none",
         cursor: "pointer",
         textAlign: "left",
         width: "fit-content",
         fontFamily: "inherit",
+        fontWeight: 400,
       }}
     >
       {/* Inner row — becomes full-width flex on mobile */}
       <div className="index-row-inner" style={{ display: "flex", alignItems: "center" }}>
 
         {/* Number + Title — 400px */}
-        <div style={{ width: 400, flexShrink: 0, display: "flex", flexDirection: "column", paddingLeft: 16, paddingRight: 24, boxSizing: "border-box", gap: 2 }}>
+        <div style={{ width: 400, flexShrink: 0, display: "flex", flexDirection: "column", paddingLeft: 0, paddingRight: 48, boxSizing: "border-box", gap: 2 }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span
               style={{
@@ -486,8 +486,8 @@ function IndexRow({
             className="index-date"
             style={{
               display: "none",
-              fontSize: size.meta,
-              lineHeight: leading.meta,
+              fontSize: size.caption,
+              lineHeight: leading.caption,
               letterSpacing: tracking.label,
               color: textColor,
               transition,
@@ -497,13 +497,13 @@ function IndexRow({
           </span>
         </div>
 
-        {/* Artist — 180px */}
+        {/* Artist — 240px */}
         <span
           className="index-col"
           style={{
-            width: 180,
+            width: 240,
             flexShrink: 0,
-            paddingRight: 24,
+            paddingRight: 48,
             boxSizing: "border-box",
             fontSize: size.meta,
             lineHeight: leading.meta,
@@ -522,7 +522,7 @@ function IndexRow({
           style={{
             width: 280,
             flexShrink: 0,
-            paddingRight: 24,
+            paddingRight: 48,
             boxSizing: "border-box",
             fontSize: size.meta,
             lineHeight: leading.meta,
@@ -1036,7 +1036,7 @@ function GalleryControls({
     function track() {
       if (btnRef.current) {
         const r = btnRef.current.getBoundingClientRect();
-        setFilterPos({ top: r.bottom + 6, left: r.left + r.width / 2 });
+        setFilterPos({ top: r.bottom + 12, left: r.left });
       }
       raf = requestAnimationFrame(track);
     }
@@ -1105,56 +1105,58 @@ function GalleryControls({
           onClick={() => setShowFilter((s) => !s)}
           active={activeNeighbourhoods.size > 0 || showFilter}
         >
-          {activeNeighbourhoods.size > 0 ? `[Filter (${activeNeighbourhoods.size})]` : "[Filter]"}
+          [Filter]
         </HoverBtn>
       </div>
 
-      <AnimatePresence>
-        {showFilter && (
-          <motion.div
-            ref={panelRef}
-            initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{
-              position: "fixed",
-              top: filterPos?.top ?? 44,
-              left: filterPos ? filterPos.left : "50%",
-              translate: "-50%",
-              zIndex: 200,
-              background: "#FFFFFF",
-              border: "1px solid #E8E8E8",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
-              padding: "6px 0",
-              minWidth: 160,
-              fontFamily: '"Geist", system-ui, sans-serif',
-            }}
-          >
-            <div style={{ padding: "4px 12px 6px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Neighbourhood</div>
-            {neighbourhoods.map((n) => {
-              const checked = activeNeighbourhoods.has(n);
-              return (
-                <button key={n} onClick={() => toggle(n)}
-                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 7, padding: "5px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: size.meta, letterSpacing: tracking.normal, color: checked ? "#202020" : "#606060", transition: "color 0.12s ease" }}
-                >
-                  <span style={{ width: 13, height: 13, border: `1px solid ${checked ? "#202020" : "#D0D0D0"}`, borderRadius: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#202020" : "transparent", transition: "all 0.12s ease" }}>
-                    {checked && (
-                      <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
-                        <path d="M1 3L2.8 5L6 1" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    )}
-                  </span>
-                  {formatNeighbourhood(n)}
-                </button>
-              );
-            })}
-            <div style={{ height: 1, background: "#F0F0F0", margin: "4px 0" }} />
-            <ClearButton
-              enabled={activeNeighbourhoods.size > 0}
-              onClick={() => { onNeighbourhoodsChange(new Set()); setShowFilter(false); }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showFilter && (
+            <motion.div
+              ref={panelRef}
+              initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
+              transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
+              style={{
+                position: "fixed",
+                top: filterPos?.top ?? 44,
+                left: filterPos ? filterPos.left : "50%",
+                zIndex: 200,
+                background: "#FFFFFF",
+                border: "1px solid #E8E8E8",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
+                padding: "6px 0",
+                minWidth: 160,
+                fontFamily: '"Geist", system-ui, sans-serif',
+              }}
+            >
+              <div style={{ padding: "4px 12px 6px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Neighbourhood</div>
+              {neighbourhoods.map((n) => {
+                const checked = activeNeighbourhoods.has(n);
+                return (
+                  <button key={n} onClick={() => toggle(n)}
+                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 7, padding: "5px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: size.meta, letterSpacing: tracking.normal, color: checked ? "#202020" : "#606060", transition: "color 0.12s ease" }}
+                  >
+                    <span style={{ width: 13, height: 13, border: `1px solid ${checked ? "#202020" : "#D0D0D0"}`, borderRadius: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#202020" : "transparent", transition: "all 0.12s ease" }}>
+                      {checked && (
+                        <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
+                          <path d="M1 3L2.8 5L6 1" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      )}
+                    </span>
+                    {formatNeighbourhood(n)}
+                  </button>
+                );
+              })}
+              <div style={{ height: 1, background: "#F0F0F0", margin: "4px 0" }} />
+              <ClearButton
+                enabled={activeNeighbourhoods.size > 0}
+                onClick={() => { onNeighbourhoodsChange(new Set()); setShowFilter(false); }}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }

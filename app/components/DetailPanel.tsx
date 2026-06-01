@@ -131,14 +131,11 @@ export function DetailPanel({
               {box.title}
             </span>
           </div>
-          {onClose && (
-            <button onClick={onClose} className="close-btn" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, lineHeight: 1, fontFamily: "inherit" }}>
-              <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
-                <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
-          )}
+          <CollectButton isCollected={isCollected} onClick={onCollect} />
         </div>
+
+        {/* Scrollable body — hero + metadata */}
+        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: isMobile ? 12 : 16 }}>
 
         {/* Hero */}
         <div style={{ flexShrink: 0, paddingInline: 16 }}>
@@ -182,7 +179,7 @@ export function DetailPanel({
         </div>
 
         {/* Metadata */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, flex: 1, overflowY: "auto", minHeight: 0, paddingInline: 16 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingInline: 16, paddingBottom: 16 }}>
           <MetaRow label="Artist" value={box.artist} labelW={labelW} />
           <MetaRow label="Year" value={formatYear(box.year)} labelW={labelW} />
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -211,14 +208,19 @@ export function DetailPanel({
             </div>
           )}
         </div>
+        </div>{/* end scrollable body */}
 
-        {/* Prev / collect / next — inside panel on mobile */}
+        {/* Prev / close / next — inside panel on mobile */}
         {isMobile && (
           <div style={{ display: "flex", gap: 8, paddingInline: 16, paddingBottom: 8, flexShrink: 0, justifyContent: "center" }}>
             <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box">
               <ChevronIcon dir="left" />
             </PillButton>
-            <CollectButton isCollected={isCollected} onClick={onCollect} />
+            <PillButton onClick={() => onClose?.()} ariaLabel="Close">
+              <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+                <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </PillButton>
             <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box">
               <ChevronIcon dir="right" />
             </PillButton>
@@ -306,13 +308,17 @@ export function DetailPanel({
         document.body
       )}
 
-      {/* Prev / collect / next — desktop only (on mobile they're inside the panel) */}
+      {/* Prev / close / next — desktop only (on mobile they're inside the panel) */}
       {!isMobile && (
         <div style={{ display: "flex", gap: 8 }}>
           <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box">
             <ChevronIcon dir="left" />
           </PillButton>
-          <CollectButton isCollected={isCollected} onClick={onCollect} />
+          <PillButton onClick={() => onClose?.()} ariaLabel="Close">
+            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </PillButton>
           <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box">
             <ChevronIcon dir="right" />
           </PillButton>
@@ -448,45 +454,54 @@ function PillButton({ children, onClick, filled = false, disabled = false, ariaL
 function CollectButton({ isCollected, onClick }: { isCollected: boolean; onClick: () => void }) {
   const [hovered, setHovered] = useState(false);
 
-  const bg = isCollected
-    ? hovered ? "#3A3A3A" : "#202020"
-    : hovered ? "#F0F0F0" : "#FFFFFF";
-
   return (
     <motion.button
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       aria-label={isCollected ? "Collected" : "Add to collection"}
-      animate={{ backgroundColor: bg, scale: 1 }}
-      whileTap={{ scale: 0.88 }}
-      transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+      whileTap={{ scale: 0.97 }}
+      animate={{
+        background: isCollected ? "#202020" : hovered ? "#F4F4F4" : "#FFFFFF",
+        color: isCollected ? "#FFFFFF" : "#202020",
+      }}
+      transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
       style={{
-        display: "flex", alignItems: "center", justifyContent: "center",
-        width: 38, height: 38, padding: 0, borderRadius: "50%",
-        border: "1px solid #E8E8E8",
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "6px 12px",
+        border: "1px solid #202020",
         cursor: "pointer", outline: "none",
         fontFamily: '"Geist", system-ui, sans-serif',
+        fontSize: size.caption,
+        letterSpacing: tracking.loose,
+        textTransform: "uppercase",
+        flexShrink: 0,
+        overflow: "hidden",
+        position: "relative",
       }}
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-        <motion.path
-          d="M1 6H11"
-          stroke={isCollected ? "#FFFFFF" : "#202020"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          animate={{ pathLength: isCollected ? 0 : 1, opacity: isCollected ? 0 : 1 }}
-          transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-        />
-        <motion.path
-          stroke={isCollected ? "#FFFFFF" : "#202020"}
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          animate={{ d: isCollected ? "M2 6L5 9L10 3" : "M6 1V11" }}
-          transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
-        />
-      </svg>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={isCollected ? "collected" : "collect"}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.15, ease: [0.25, 0.1, 0.25, 1] }}
+          style={{ display: "flex", alignItems: "center", gap: 8 }}
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            {isCollected ? (
+              <path d="M2 6L4.5 8.5L10 3" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+            ) : (
+              <>
+                <path d="M6 2.5V9.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+                <path d="M2.5 6H9.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
+              </>
+            )}
+          </svg>
+          {isCollected ? "Collected" : "Collect"}
+        </motion.span>
+      </AnimatePresence>
     </motion.button>
   );
 }

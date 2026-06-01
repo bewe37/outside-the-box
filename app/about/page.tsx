@@ -131,16 +131,15 @@ export default function AboutPage() {
     >
       <div ref={containerRef} style={{ flex: 1, position: "relative", overflow: "hidden" }}>
 
-        {/* Content — pinned to right ~45% */}
+        {/* Content — left-aligned, flows from top */}
         <div
           className="about-sections"
           style={{
             position: "absolute",
-            top: "50%",
+            top: 80,
             right: 32,
-            translate: "0 -50%",
             zIndex: 10,
-            width: "min(420px, calc(100vw - 48px))",
+            width: "min(440px, calc(100vw - 64px))",
             display: "flex",
             flexDirection: "column",
             gap: 0,
@@ -181,7 +180,7 @@ export default function AboutPage() {
             </span>
             <a
               href="mailto:bryanwinata112@gmail.com"
-              style={{ fontSize: size.body, lineHeight: leading.body, letterSpacing: tracking.normal, color: "#202020", textDecoration: "none" }}
+              style={{ fontSize: "15px", lineHeight: leading.body, letterSpacing: tracking.normal, color: "#202020", textDecoration: "none" }}
             >
               bryanwinata112@gmail.com
             </a>
@@ -190,6 +189,7 @@ export default function AboutPage() {
 
         {/* Made by — bottom-right */}
         <div
+          className="about-credit"
           style={{
             position: "absolute",
             bottom: 20,
@@ -242,7 +242,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
     <div style={{
       display: "grid",
       gridTemplateColumns: "1fr",
-      paddingBottom: 28,
+      paddingBottom: 24,
     }}>
       <span style={{
         fontSize: size.caption,
@@ -255,11 +255,12 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
         {label}
       </span>
       <span style={{
-        fontSize: size.body,
+        fontSize: "18px",
         lineHeight: leading.body,
         letterSpacing: tracking.normal,
         color: "#202020",
-      }}>
+        textWrap: "pretty",
+      } as React.CSSProperties}>
         {children}
       </span>
     </div>
