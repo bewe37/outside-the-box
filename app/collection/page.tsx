@@ -21,6 +21,7 @@ const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
 export default function CollectionPage() {
   const { user, session, loading, signIn, signOut, setCollectionCount } = useAuth();
   const [collected, setCollected] = useState<Set<number>>(new Set());
+  const [collectedOrder, setCollectedOrder] = useState<number[]>([]);
   const [collectionLoading, setCollectionLoading] = useState(true);
   const [collectionError, setCollectionError] = useState(false);
   const [toast, setToast] = useState("");
@@ -38,10 +39,13 @@ export default function CollectionPage() {
   useEffect(() => {
     if (!user) { setCollected(new Set()); setUsername(null); setUserPhotos({}); setCollectionLoading(false); return; }
     setCollectionLoading(true);
-    supabase.from("collections").select("box_id").eq("user_id", user.id)
+    supabase.from("collections").select("box_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
       .then(({ data, error }) => {
         if (error) { setCollectionError(true); }
-        else if (data) setCollected(new Set(data.map((r: { box_id: number }) => r.box_id)));
+        else if (data) {
+          setCollected(new Set(data.map((r: { box_id: number }) => r.box_id)));
+          setCollectedOrder(data.map((r: { box_id: number }) => r.box_id));
+        }
         setCollectionLoading(false);
       });
     supabase.from("profiles").select("username").eq("id", user.id).maybeSingle()
@@ -61,7 +65,9 @@ export default function CollectionPage() {
       .catch(() => {});
   }, [session, collected]);
 
-  const collectedBoxes = allBoxes.filter((b) => collected.has(b.id));
+  const collectedBoxes = collectedOrder
+    .map((id) => allBoxes.find((b) => b.id === id))
+    .filter((b): b is Box => b !== undefined);
 
   async function toggleCollect(id: number) {
     if (!user) return;
