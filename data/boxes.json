@@ -348,19 +348,6 @@
     ]
   },
   {
-    "id": 38,
-    "title": "UNKNOWN TITLE",
-    "address": "1232 College St, Toronto, Ontario",
-    "neighbourhood": "DUFFERIN GROVE",
-    "artist": "Jenn Kitagawa",
-    "year": 2021,
-    "captured": "5/25/26",
-    "description": "",
-    "images": [
-      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779899028575-zxn9ne9zm69.jpg"
-    ]
-  },
-  {
     "id": 39,
     "title": "UNKNOWN TITLE",
     "address": "47 Margueretta St, Toronto, Ontario",
@@ -620,6 +607,20 @@
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332974228-o43915in22m.jpg",
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332975350-m9zw5e94k5.jpg",
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332976030-y9be026g1e.jpg"
+    ]
+  },
+  {
+    "id": 58,
+    "title": "UNKNOWN TITLE",
+    "address": "1232 College St",
+    "neighbourhood": "DUFFERIN GROVE",
+    "artist": "Jenn Kitagawa",
+    "year": 2021,
+    "captured": "6/1/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337030990-w7jd4z1mb1g.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337032272-4hxghqqb4bk.jpg"
     ]
   }
 ]
