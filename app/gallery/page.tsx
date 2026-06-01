@@ -608,6 +608,7 @@ const NEIGHBOURHOOD_STAMPS: Record<string, string> = {
   "RIVERSIDE":         "/Harbourfront.svg",
   "CORK TOWN":         "/CabbageTown.svg",
   "THE ANNEX":         "/Annex.svg",
+  "CHURCH-WELLESLEY":  "/Church.svg",
 };
 
 const NEIGHBOURHOOD_ROTATION: Record<string, number> = {
@@ -618,6 +619,7 @@ const NEIGHBOURHOOD_ROTATION: Record<string, number> = {
   "RIVERSIDE":         -1,
   "CORK TOWN":          1,
   "THE ANNEX":         -2.5,
+  "CHURCH-WELLESLEY":  -1,
 };
 
 // ─── Stamp lightbox ───────────────────────────────────────────────────────────
