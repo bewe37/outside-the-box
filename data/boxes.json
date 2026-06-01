@@ -391,7 +391,7 @@
     "id": 41,
     "title": "UNKNOWN TITLE",
     "address": "181 Bay St, Toronto, Ontario",
-    "neighbourhood": "OLD TORONTO",
+    "neighbourhood": "FINANCIAL CORE",
     "artist": "Leeay Aikawa",
     "year": 2018,
     "captured": "5/24/26",
@@ -399,6 +399,227 @@
     "images": [
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779899844531-z9rc8e52beq.jpg",
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1779899845448-elajlt15d8b.jpg"
+    ]
+  },
+  {
+    "id": 42,
+    "title": "UNKNOWN TITLE",
+    "address": "1421 Dundas St W",
+    "neighbourhood": "LITTLE PORTUGAL",
+    "artist": "Vivian Rosas",
+    "year": 2017,
+    "captured": "5/25/26",
+    "description": "The design is inspired by the young vibrant community of people in the city. The people can be seen in the local farmer’s markets, on trendy Queen west, headed to yoga, or delivering your lunch. Showing the range of diversity, and creativity the community has.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330105021-tkw1vlg7kk.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330106298-bin0ncwwq1b.jpg"
+    ]
+  },
+  {
+    "id": 43,
+    "title": "UNKNOWN TITLE",
+    "address": "1025 Queen St West",
+    "neighbourhood": "WEST QUEEN WEST",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "5/24/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330308532-kje9c7cct6.jpg"
+    ]
+  },
+  {
+    "id": 44,
+    "title": "UNKNOWN TITLE",
+    "address": "1435 Dundas St W",
+    "neighbourhood": "LITTLE PORTUGAL",
+    "artist": "la.loica",
+    "year": 2020,
+    "captured": "5/24/26",
+    "description": "The theme was Culture and the Arts, and with great respect, I wanted to pay a small tribute to the strength of the south.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330566388-cwgjr56782.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330567606-dmh89zdumg.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330568505-bj7salehxrh.jpg"
+    ]
+  },
+  {
+    "id": 45,
+    "title": "UNKNOWN TITLE",
+    "address": "1214 Dundas St W",
+    "neighbourhood": "TRINITY BELLWOODS",
+    "artist": "@mjsketchbook",
+    "year": "UNKNOWN",
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330926029-1d7bb0rtnre.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780330927377-ncgd2za6ly.jpg"
+    ]
+  },
+  {
+    "id": 46,
+    "title": "UNKNOWN TITLE",
+    "address": "1001 Queen St W",
+    "neighbourhood": "TRINITY BELLWOODS",
+    "artist": "Eric Euler",
+    "year": "UNKNOWN",
+    "captured": "6/1/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331024525-hq6drjund2n.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331025441-f9bfsfhh2qt.jpg"
+    ]
+  },
+  {
+    "id": 47,
+    "title": "QUEEN BATHURST",
+    "address": "665 Queen St W",
+    "neighbourhood": "WEST QUEEN WEST",
+    "artist": "Elicser",
+    "year": 2023,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331296567-clgv3k370mb.jpg"
+    ]
+  },
+  {
+    "id": 48,
+    "title": "CRYSTAL DREAMS",
+    "address": "164 Bathurst St",
+    "neighbourhood": "WEST QUEEN WEST",
+    "artist": "Roshni Wijayasinha",
+    "year": 2021,
+    "captured": "5/25/26",
+    "description": "Crystal Dreams is meant to elicit energy from its area and share it with those who pass by. It captures the spirit of Toronto and its spirited people through a vibrant crystal that emanates positivity and good vibes to bring happiness to its neighbourhood everyday.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331359878-btinx75nto9.jpg"
+    ]
+  },
+  {
+    "id": 49,
+    "title": "UNKNOWN TITLE",
+    "address": "70 Spadina Ave",
+    "neighbourhood": "FASHION DISTRICT",
+    "artist": "Steven Twigg",
+    "year": 2018,
+    "captured": "6/1/26",
+    "description": "The design playfully animates some common things seen walking throughout the cityscape. Construction cranes to paper cranes, birds on a wire to stunt pigeons, everything can be transformed by imagination.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331571239-kuqxjd6wg6.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331572219-9zvhnwdk3rm.jpg"
+    ]
+  },
+  {
+    "id": 50,
+    "title": "UNKNOWN TITLE",
+    "address": "143 Spadina Ave",
+    "neighbourhood": "FASHION DISTRICT",
+    "artist": "Emily Harrison",
+    "year": 2017,
+    "captured": "6/1/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331688207-k2ubs3sjo1.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331689300-gus1u0ozrlp.jpg"
+    ]
+  },
+  {
+    "id": 51,
+    "title": "UNKNOWN TITLE",
+    "address": "371 Queen St W",
+    "neighbourhood": "WEST QUEEN WEST",
+    "artist": "Pudy Tong",
+    "year": "UNKNOWN",
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331809920-ibdzsi8urpr.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780331810934-wzuvw72qt7l.jpg"
+    ]
+  },
+  {
+    "id": 52,
+    "title": "UNKNOWN TITLE",
+    "address": "192 Adelaide St W",
+    "neighbourhood": "FASHION DISTRICT",
+    "artist": "Dean Martin",
+    "year": 2018,
+    "captured": "5/26/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332152260-8afy8k43yop.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332153464-vtbjtkaofy.jpg"
+    ]
+  },
+  {
+    "id": 53,
+    "title": "UNKNOWN TITLE",
+    "address": "150 York St",
+    "neighbourhood": "FINANCIAL CORE",
+    "artist": "Hello Kirsten",
+    "year": 2018,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332398545-51ox131985p.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332399863-6a0w0kro599.jpg"
+    ]
+  },
+  {
+    "id": 54,
+    "title": "UNKNOWN TITLE",
+    "address": "144 Wellington St W",
+    "neighbourhood": "FINANCIAL CORE",
+    "artist": "Leeay Aikawa",
+    "year": 2018,
+    "captured": "5/25/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332598803-6r0ap7kndmx.jpg"
+    ]
+  },
+  {
+    "id": 55,
+    "title": "BRIGHTER DAY",
+    "address": "70 Carlton St",
+    "neighbourhood": "CHURCH-WELLESLEY",
+    "artist": "Jacquie Comrie",
+    "year": 2015,
+    "captured": "5/29/26",
+    "description": "The work titled Brighter Day, is an abstract portrayal of this united LGBT community, focusing on its resonance, and progress. Through the use of bold colour palettes and linearity to achieve movement, the painting focuses on this precise progression of times, transitioning from dark to bright hues, resembling darker days in the community to a brighter future of equality. Prismatic crystals are represented, as they are vital to the transformation of white light into a full spectrum of colour or rainbow- the community's symbol of identity and pride.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332701742-mlts293onk.jpg"
+    ]
+  },
+  {
+    "id": 56,
+    "title": "UNKNOWN TITLE",
+    "address": "345 Yonge St",
+    "neighbourhood": "GARDEN DISTRICT",
+    "artist": "Teal Matrix",
+    "year": 2015,
+    "captured": "6/1/26",
+    "description": "EARTHBOUND. PLANTS BOUND TO EARTH BY THEIR ROOTS, ON THEIR WAY.",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332827599-zne8sfrhwm.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332828688-v9ov75g52q.jpg"
+    ]
+  },
+  {
+    "id": 57,
+    "title": "UNKNOWN TITLE",
+    "address": "89 Gould St",
+    "neighbourhood": "GARDEN DISTRICT",
+    "artist": "Phoebe Lau",
+    "year": 2017,
+    "captured": "5/29/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332974228-o43915in22m.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332975350-m9zw5e94k5.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780332976030-y9be026g1e.jpg"
     ]
   }
 ]

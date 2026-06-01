@@ -230,13 +230,13 @@ export default function MasonryView({
 
   return (
     <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 32, paddingTop: 64 }}>
-      <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 28 }}>
+      <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 20 }}>
         {boxes.map((box, i) => (
           <div
             key={box.id}
             ref={(el) => { cardRefs.current[i] = el; }}
             className="masonry-card"
-            style={{ breakInside: "avoid", marginBottom: 28 }}
+            style={{ breakInside: "avoid", marginBottom: 20 }}
           >
             <MasonryCard
               box={box}

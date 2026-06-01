@@ -226,7 +226,7 @@ function CollectionView({
         {showShareModal && (
           <>
             <motion.div key="share-backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }} onClick={() => setShowShareModal(false)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 30 }} />
-            <motion.div key="share-panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: "50%", left: "50%", translate: "-50% -50%", zIndex: 31, width: "min(420px, calc(100vw - 32px))", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", padding: 28, fontFamily: '"Geist", system-ui, sans-serif', display: "flex", flexDirection: "column", gap: 16 }}>
+            <motion.div key="share-panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: "50%", left: "50%", translate: "-50% -50%", zIndex: 31, width: "min(420px, calc(100vw - 32px))", backgroundColor: "#FFFFFF", border: "1px solid #E8E8E8", padding: 16, fontFamily: '"Geist", system-ui, sans-serif', display: "flex", flexDirection: "column", gap: 12 }}>
               {/* Header */}
               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
                 <div>
@@ -268,7 +268,7 @@ function CollectionView({
           const i = collectedBoxes.findIndex((b) => b.id === selected.id);
           return (
             <>
-              <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, backgroundColor: "rgba(255,255,255,0.85)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 50, cursor: "default" }} />
+              <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, backgroundColor: "#FFFFFF", zIndex: 50, cursor: "default" }} />
               <motion.div key="panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }} className="lightbox-modal" style={{ position: "fixed", zIndex: 51 }}>
                 <DetailPanel
                   box={selected}
@@ -279,8 +279,6 @@ function CollectionView({
                   onNext={() => { if (i < collectedBoxes.length - 1) setSelected(collectedBoxes[i + 1]); }}
                   hasPrev={i > 0}
                   hasNext={i < collectedBoxes.length - 1}
-                  userPhoto={userPhotos[selected.id]}
-                  onSwapPhoto={(file) => swapPhoto(selected.id, file)}
                   onClose={() => setSelected(null)}
                   capturedLabel="COLLECTED"
                 />
