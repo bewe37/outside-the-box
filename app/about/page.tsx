@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { size, tracking, weight, leading } from "@/lib/typography";
 import { boxes, type Box } from "@/lib/data";
 
@@ -21,6 +22,7 @@ let idCounter = 0;
 
 export default function AboutPage() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const textPanelRef = useRef<HTMLDivElement>(null);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const imgIndex = useRef(0);
   const items = useRef<TrailItem[]>([]);
@@ -110,6 +112,12 @@ export default function AboutPage() {
     }
 
     function onMouseMove(e: MouseEvent) {
+      // Don't spawn trail over the text panel
+      if (textPanelRef.current) {
+        const pr = textPanelRef.current.getBoundingClientRect();
+        if (e.clientX >= pr.left - 24 && e.clientX <= pr.right + 24 &&
+            e.clientY >= pr.top - 24 && e.clientY <= pr.bottom + 24) return;
+      }
       const rect = container!.getBoundingClientRect();
       spawnAt(e.clientX - rect.left, e.clientY - rect.top);
     }
@@ -133,6 +141,7 @@ export default function AboutPage() {
 
         {/* Content — left-aligned, flows from top */}
         <div
+          ref={textPanelRef}
           className="about-sections"
           style={{
             position: "absolute",
@@ -148,11 +157,19 @@ export default function AboutPage() {
           <InfoRow label="About">
             Toronto&apos;s painted utility boxes are everywhere. Most people walk past
             them. This is my attempt to document them: where they are, who made them,
-            and when.
+            and when.{" "}
+            <a
+              href="https://www.streetartoronto.ca/outside-the-box"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: "#202020", textDecoration: "none", borderBottom: "1px solid #202020", paddingBottom: 1 }}
+            >
+              Read more about the program ↗
+            </a>
           </InfoRow>
 
           <InfoRow label="How I collect">
-            Every box is one I&apos;ve found and photographed myself, on foot.
+            Every box is one I&apos;ve found and photographed myself, on foot, shot on a <RicohTooltip />.
             I track down artist credits from signage, city listings, or social media.
             If there&apos;s no credit, I say so rather than guess.
           </InfoRow>
@@ -237,6 +254,44 @@ export default function AboutPage() {
   );
 }
 
+function RicohTooltip() {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  return (
+    <>
+      <span
+        onMouseEnter={(e) => setPos({ x: e.clientX, y: e.clientY })}
+        onMouseMove={(e) => setPos({ x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => setPos(null)}
+        style={{ borderBottom: "1px solid #202020", paddingBottom: 1, cursor: "default" }}
+      >
+        Ricoh GR3
+      </span>
+      {mounted && pos && createPortal(
+        <div style={{
+          position: "fixed",
+          top: pos.y + 16,
+          left: pos.x + 16,
+          zIndex: 9999,
+          pointerEvents: "none",
+          background: "#FFFFFF",
+          border: "1px solid #E8E8E8",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.10)",
+          overflow: "hidden",
+          width: 160,
+          height: 120,
+        }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/ricoh.png" alt="Ricoh GR3" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{
@@ -255,10 +310,11 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
         {label}
       </span>
       <span style={{
-        fontSize: "18px",
-        lineHeight: leading.body,
+        fontSize: "16px",
+        lineHeight: "1.6",
         letterSpacing: tracking.normal,
         color: "#202020",
+        fontWeight: 400,
         textWrap: "pretty",
       } as React.CSSProperties}>
         {children}

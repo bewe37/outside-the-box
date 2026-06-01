@@ -1002,7 +1002,7 @@ const HoverBtn = React.forwardRef<HTMLButtonElement, {
         background: "none", border: "none", outline: "none", cursor: "pointer",
         padding: 0, fontFamily: "inherit",
         fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label,
-        textTransform: "uppercase", color, transition: "color 0.12s ease",
+        textTransform: "uppercase", color, transition: "color 0.12s ease", fontWeight: 500,
       }}
     >
       {children}

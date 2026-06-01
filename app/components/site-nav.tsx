@@ -24,6 +24,7 @@ function NavPageLink({ href, label, active }: { href: string; label: string; act
         color: active || hovered ? "#202020" : "#A8A8A8",
         textDecoration: "none",
         transition: "color 0.15s ease",
+        fontWeight: 500,
       }}
     >
       [{label}]

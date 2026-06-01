@@ -115,8 +115,8 @@ export default function CollectionPage() {
 
   if (!user) {
     return (
-      <BoxState label="Sign in to start your collection">
-        <button onClick={signIn} style={ctaButton}>Sign in with Google →</button>
+      <BoxState label="Start your collection">
+        <SignInButton onClick={signIn} />
       </BoxState>
     );
   }
@@ -124,16 +124,7 @@ export default function CollectionPage() {
   if (collectedBoxes.length === 0) {
     return (
       <BoxState label="Your collection is empty">
-        <Link href="/gallery" style={{
-          fontSize: size.caption,
-          letterSpacing: tracking.label,
-          textTransform: "uppercase",
-          color: "#202020",
-          textDecoration: "none",
-          fontFamily: '"Geist", system-ui, sans-serif',
-        }}>
-          Browse the gallery →
-        </Link>
+        <BrowseButton />
       </BoxState>
     );
   }
@@ -302,6 +293,46 @@ function CollectionView({
   );
 }
 
+function BrowseButton() {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <Link
+      href="/gallery"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose,
+        textTransform: "uppercase", fontWeight: weight.medium, color: "#202020",
+        background: hovered ? "#F4F4F4" : "transparent", border: "1px solid #202020",
+        padding: "6px 14px", fontFamily: "inherit", textDecoration: "none",
+        display: "inline-block", transition: "background 0.15s ease",
+      }}
+    >
+      Browse the gallery →
+    </Link>
+  );
+}
+
+function SignInButton({ onClick }: { onClick: () => void }) {
+  const [hovered, setHovered] = useState(false);
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose,
+        textTransform: "uppercase", fontWeight: weight.medium, color: "#202020",
+        background: hovered ? "#F4F4F4" : "none", border: "1px solid #202020",
+        padding: "6px 14px", cursor: "pointer", fontFamily: "inherit",
+        transition: "background 0.15s ease",
+      }}
+    >
+      Sign in with Google →
+    </button>
+  );
+}
+
 // ─── Box State (sign-in + empty collection) ───────────────────────────────────
 
 function BoxState({ label, children }: { label: string; children: React.ReactNode }) {
@@ -449,14 +480,15 @@ const centeredFlex: React.CSSProperties = {
 };
 
 const emptyLabel: React.CSSProperties = {
-  margin: 0, fontSize: size.caption, lineHeight: leading.caption,
-  letterSpacing: tracking.loose, textTransform: "uppercase", color: "#CACACA",
+  margin: 0, fontSize: size.meta, lineHeight: leading.meta,
+  letterSpacing: tracking.normal, color: "#202020", fontWeight: weight.medium,
 };
 
 const ctaButton: React.CSSProperties = {
-  fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.label,
-  fontWeight: weight.medium, textTransform: "uppercase", color: "#202020",
-  background: "none", border: "none",
+  fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose,
+  textTransform: "uppercase", fontWeight: weight.medium, color: "#202020",
+  background: "none", border: "1px solid #202020",
+  padding: "6px 14px",
   cursor: "pointer", fontFamily: "inherit", textDecoration: "none",
 };
 
