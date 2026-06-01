@@ -39,14 +39,28 @@ export default function CollectionPage() {
   useEffect(() => {
     if (!user) { setCollected(new Set()); setUsername(null); setUserPhotos({}); setCollectionLoading(false); return; }
     setCollectionLoading(true);
-    supabase.from("collections").select("box_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false })
+    supabase.from("collections").select("box_id, created_at").eq("user_id", user.id)
       .then(({ data, error }) => {
-        if (error) { setCollectionError(true); }
-        else if (data) {
-          setCollected(new Set(data.map((r: { box_id: number }) => r.box_id)));
-          setCollectedOrder(data.map((r: { box_id: number }) => r.box_id));
+        if (error) {
+          // Fallback: try without created_at in case column doesn't exist
+          supabase.from("collections").select("box_id").eq("user_id", user.id)
+            .then(({ data: data2, error: error2 }) => {
+              if (error2) { setCollectionError(true); }
+              else if (data2) {
+                const ids = data2.map((r: { box_id: number }) => r.box_id);
+                setCollected(new Set(ids));
+                setCollectedOrder(ids);
+              }
+              setCollectionLoading(false);
+            });
+        } else if (data) {
+          const sorted = [...data].sort((a, b) =>
+            new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime()
+          );
+          setCollected(new Set(sorted.map((r: { box_id: number }) => r.box_id)));
+          setCollectedOrder(sorted.map((r: { box_id: number }) => r.box_id));
+          setCollectionLoading(false);
         }
-        setCollectionLoading(false);
       });
     supabase.from("profiles").select("username").eq("id", user.id).maybeSingle()
       .then(({ data }) => { if (data?.username) setUsername(data.username); });
