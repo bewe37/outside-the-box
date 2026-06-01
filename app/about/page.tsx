@@ -84,7 +84,7 @@ export default function AboutPage() {
 
       const img = document.createElement("img");
       // Request a small optimized version — trail cards are only 72px wide
-      img.src = `/_next/image?url=${encodeURIComponent(src)}&w=128&q=60`;
+      img.src = src;
       img.style.cssText = `
         width: 100%;
         height: 100%;
