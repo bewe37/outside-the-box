@@ -206,7 +206,7 @@ input[type="range"].col-slider::-moz-range-thumb {
 
   /* About title — hide on mobile since sections are in flow */
   .about-title { display: none !important; }
-  .about-credit { right: auto !important; left: 20px !important; }
+  .about-credit { position: fixed !important; right: auto !important; left: 20px !important; bottom: 20px !important; }
 
   /* Lightbox — true full screen on mobile */
   .lightbox-modal {
