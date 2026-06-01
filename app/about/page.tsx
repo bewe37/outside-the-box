@@ -150,8 +150,9 @@ export default function AboutPage() {
         >
           <InfoRow label="About">
             Toronto&apos;s painted utility boxes are everywhere. Most people walk past
-            them. This is my attempt to document them: where they are, who made them,
-            and when.{" "}
+            them. Many don&apos;t last: boxes get replaced, decommissioned, painted over.
+            This is my attempt to document them before they disappear: where they are,
+            who made them, and when.{" "}
             <a
               href="https://www.streetartoronto.ca/outside-the-box"
               target="_blank"
