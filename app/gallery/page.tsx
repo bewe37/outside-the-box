@@ -36,8 +36,8 @@ export default function GalleryPage() {
   const [view, setView] = useState<ViewMode>("PHOTOS");
   const [collected, setCollected] = useState<Set<number>>(new Set());
   const [gridSelected, setGridSelected] = useState<Box | null>(null);
-  const [photoColumns, setPhotoColumns] = useState(3);
-  const prevColumns = useRef(3);
+  const [photoColumns, setPhotoColumns] = useState(5);
+  const prevColumns = useRef(5);
 
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
