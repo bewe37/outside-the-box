@@ -111,8 +111,8 @@ export default function AboutPage() {
     }
 
     function onMouseMove(e: MouseEvent) {
-      // Don't spawn trail on the right side where the text panel lives
-      if (e.clientX > window.innerWidth * 0.55) return;
+      // Don't spawn trail near the text panel (440px wide + 32px from right edge)
+      if (e.clientX > window.innerWidth - 440 - 32 - 24) return;
       const rect = container!.getBoundingClientRect();
       spawnAt(e.clientX - rect.left, e.clientY - rect.top);
     }
