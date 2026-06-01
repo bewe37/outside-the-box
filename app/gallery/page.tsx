@@ -273,7 +273,7 @@ export default function GalleryPage() {
 // the text columns. Its actual width/height is derived per-image from the
 // photo's natural aspect ratio (see previewSize below).
 const HOVER_PREVIEW = {
-  left: 1120,        // pinned X (past the row's text columns)
+  left: 1180,        // pinned X: 32px padding + 1140px columns + 8px gap
   maxEdge: 280,      // bounding box for either dimension
   fallback: { width: 200, height: 280 }, // before aspect is known
 };
