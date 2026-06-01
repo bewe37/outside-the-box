@@ -148,7 +148,7 @@ export function DetailPanel({
               src={heroSrc}
               alt={box.title}
               fill
-              style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease" }}
+              style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease", filter: "saturate(1.15)" }}
               onLoad={() => setTimeout(() => setHeroLoaded(true), 80)}
             />
           </div>
@@ -201,7 +201,7 @@ export function DetailPanel({
                     onClick={() => setLightboxIndex(i + 1)}
                     style={{ flex: "0 0 88px", width: 88, height: 88, position: "relative", scrollSnapAlign: "start", cursor: "zoom-in" }}
                   >
-                    <Image src={src} alt="" fill style={{ objectFit: "cover" }} loading="lazy" />
+                    <Image src={src} alt="" fill style={{ objectFit: "cover", filter: "saturate(1.15)" }} loading="lazy" />
                   </div>
                 ))}
               </div>

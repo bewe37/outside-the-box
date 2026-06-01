@@ -22,7 +22,6 @@ let idCounter = 0;
 
 export default function AboutPage() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const textPanelRef = useRef<HTMLDivElement>(null);
   const lastPos = useRef<{ x: number; y: number } | null>(null);
   const imgIndex = useRef(0);
   const items = useRef<TrailItem[]>([]);
@@ -112,12 +111,6 @@ export default function AboutPage() {
     }
 
     function onMouseMove(e: MouseEvent) {
-      // Don't spawn trail over the text panel
-      if (textPanelRef.current) {
-        const pr = textPanelRef.current.getBoundingClientRect();
-        if (e.clientX >= pr.left - 24 && e.clientX <= pr.right + 24 &&
-            e.clientY >= pr.top - 24 && e.clientY <= pr.bottom + 24) return;
-      }
       const rect = container!.getBoundingClientRect();
       spawnAt(e.clientX - rect.left, e.clientY - rect.top);
     }
@@ -141,7 +134,6 @@ export default function AboutPage() {
 
         {/* Content — left-aligned, flows from top */}
         <div
-          ref={textPanelRef}
           className="about-sections"
           style={{
             position: "absolute",
