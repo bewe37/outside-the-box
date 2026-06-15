@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
-import { useDialKit } from "dialkit";
 import { boxes, formatNeighbourhood, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
 import { DetailPanel } from "@/app/components/DetailPanel";
 import { size, tracking, leading } from "@/lib/typography";
@@ -273,8 +272,8 @@ export default function GalleryPage() {
 
 // ─── Motion depth stack (fixed, viewport-centered) ────────────────────────────
 
-// 4:5 frame — gentler than 3:4, so landscape photos lose less to the crop
-// while portrait photos still read as upright cards.
+// Portrait-leaning 4:5 frame with object-fit: cover — full-bleed, no bars.
+// Favours portrait photos (most of the set); landscape crops to the center.
 const STACK_W = 340, STACK_H = 425;
 
 // Tunable knobs for the stack geometry. Defaults match the baked-in look;
@@ -282,9 +281,10 @@ const STACK_W = 340, STACK_H = 425;
 export type StackParams = {
   spacing: number;   // px gap between each stacked card (peek)
   blurStep: number;  // px of blur added per depth level
+  exitBlur: number;  // px of blur on a card as it fades out (item swap)
 };
 
-export const DEFAULT_STACK_PARAMS: StackParams = { spacing: 50, blurStep: 3 };
+export const DEFAULT_STACK_PARAMS: StackParams = { spacing: 30, blurStep: 2, exitBlur: 50 };
 
 // Geometry per depth slot. index 0 = front (large, sharp), higher = receding.
 // Anchored from the top so each card's top edge peeks a fixed gap above the
@@ -298,38 +298,34 @@ function slotGeo(i: number, p: StackParams) {
   };
 }
 
-// A single card. It animates between depth slots as `depth` changes, and
-// fades/blurs in when it enters at the back, out the front when it leaves.
-// The `spring` (from DialKit) drives the position/scale settle.
+// A single card. Keyed by image, so when the hovered item changes, motion
+// slides each surviving card forward one depth slot (the `layout` animation).
+// A newly added card simply fades in AT its back slot — no flying in from above.
+// The front card fades + blurs out as it leaves.
 function StackCard({ src, depth, params, spring }: { src: string; depth: number; params: StackParams; spring: object }) {
   const g = slotGeo(depth, params);
   return (
     <motion.div
-      layout
-      initial={{
-        // enters at its own slot — just fades in, no vertical lift
-        y: g.y,
-        scale: g.scale,
-        opacity: 0,
-        filter: `blur(${g.blur}px)`,
-      }}
+      // Position animated via `y` (not layout), so a new card starts AT its own
+      // slot + a tiny 8px rise — never flashing high. Surviving cards animate
+      // their y from the old slot to the new one as depth changes.
+      initial={{ opacity: 0, y: g.y + 8 }}
       animate={{
+        opacity: g.opacity,
         y: g.y,
         scale: g.scale,
-        opacity: g.opacity,
         filter: `blur(${g.blur}px)`,
       }}
       exit={{
-        // quick, light fade-out so rapid movement doesn't pile up heavy blur
         opacity: 0,
-        filter: "blur(5px)",
+        filter: `blur(${params.exitBlur}px)`,
+        transition: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
       }}
       transition={{
-        layout: spring,
         y: spring,
         scale: spring,
-        opacity: { duration: 0.22, ease: "easeOut" },
-        filter: { duration: 0.22, ease: "easeOut" },
+        opacity: { duration: 0.4, ease: "easeOut" },
+        filter: { duration: 0.3, ease: "easeOut" },
       }}
       style={{
         position: "absolute",
@@ -337,9 +333,9 @@ function StackCard({ src, depth, params, spring }: { src: string; depth: number;
         height: STACK_H,
         left: 0,
         top: 0,
-        overflow: "hidden",
         transformOrigin: "center top",
         zIndex: 10 - depth,
+        overflow: "hidden",
         boxShadow: depth === 0 ? "0 12px 48px rgba(0,0,0,0.16)" : undefined,
         backgroundColor: "#E8E8E8",
       }}
@@ -372,10 +368,9 @@ function DepthStack({ srcs, visible, params, spring }: { srcs: string[]; visible
             zIndex: 40,
           }}
         >
-          {/* Each card keyed by its image so motion can move it between depth
-              slots — when the hovered item changes, the front exits, the rest
-              shift forward, and a new card enters at the back. */}
-          <AnimatePresence>
+          {/* Keyed by image so motion slides each surviving card forward a slot
+              when the item changes; the new card fades in at the back slot. */}
+          <AnimatePresence mode="popLayout">
             {cards.map((src, depth) => (
               <StackCard key={src} src={src} depth={depth} params={params} spring={spring} />
             ))}
@@ -399,19 +394,9 @@ function IndexView({
   const hoveredIndex = hovered ? boxes.findIndex(b => b.id === hovered.id) : -1;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ── DialKit: live controls for the depth-stack hover animation ──────────────
-  // Spacing = px gap between each stacked card. Blur = px added per depth level.
-  // The animation spring drives how cards settle as they shift between depths.
-  const dials = useDialKit("Index Stack", {
-    spacing: [DEFAULT_STACK_PARAMS.spacing, 0, 120],   // [default, min, max]
-    blurStep: [DEFAULT_STACK_PARAMS.blurStep, 0, 16],
-    spring: {
-      type: "spring",
-      visualDuration: 0.5,
-      bounce: 0.18,
-    },
-  });
-  const stackParams: StackParams = { spacing: dials.spacing, blurStep: dials.blurStep };
+  // Depth-stack geometry + the spring that settles cards as they shift slots.
+  const stackParams = DEFAULT_STACK_PARAMS;
+  const stackSpring = { type: "spring" as const, visualDuration: 0.32, bounce: 0 };
 
   // front = hovered box, then next 3 boxes looping
   const srcs = useMemo(() => {
@@ -447,7 +432,7 @@ function IndexView({
         paddingInline: 32,
       }}
     >
-      <DepthStack srcs={srcs} visible={hovered !== null} params={stackParams} spring={dials.spring} />
+      <DepthStack srcs={srcs} visible={hovered !== null} params={stackParams} spring={stackSpring} />
 
       {/* Shared sliding highlight — spans full viewport width, follows the
           hovered row instead of re-rendering per row. */}
@@ -657,6 +642,9 @@ function GalleryControls({
   onNeighbourhoodsChange: (s: Set<string>) => void;
 }) {
   const [showFilter, setShowFilter] = useState(false);
+  // Direction of the last column change: +1 = increased (slide up), -1 = decreased.
+  // Stored in state so the entering and exiting digit agree on direction.
+  const [colDir, setColDir] = useState(1);
   const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -708,15 +696,27 @@ function GalleryControls({
             <motion.div key="slider" className="nav-slider" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} style={{ overflow: "hidden", display: "flex", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8" }}>
                 <input type="range" className="col-slider" min={2} max={6} value={photoColumns}
-                  onChange={(e) => { prevColumnsRef.current = photoColumns; onColumnsChange(Number(e.target.value)); }}
+                  onChange={(e) => {
+                    const next = Number(e.target.value);
+                    if (next === photoColumns) return;
+                    setColDir(next > photoColumns ? 1 : -1);
+                    prevColumnsRef.current = photoColumns;
+                    onColumnsChange(next);
+                  }}
                 />
                 <span style={{ display: "inline-block", width: 10, height: 16, overflow: "hidden", position: "relative", verticalAlign: "middle" }}>
-                  <AnimatePresence mode="popLayout" initial={false}>
+                  <AnimatePresence mode="popLayout" initial={false} custom={colDir}>
                     <motion.span
                       key={photoColumns}
-                      initial={{ y: photoColumns > prevColumnsRef.current ? "100%" : "-100%" }}
-                      animate={{ y: "0%" }}
-                      exit={{ y: photoColumns > prevColumnsRef.current ? "-100%" : "100%" }}
+                      custom={colDir}
+                      variants={{
+                        enter: (dir: number) => ({ y: dir > 0 ? "100%" : "-100%" }),
+                        center: { y: "0%" },
+                        exit: (dir: number) => ({ y: dir > 0 ? "-100%" : "100%" }),
+                      }}
+                      initial="enter"
+                      animate="center"
+                      exit="exit"
                       transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
                       style={{ display: "block", fontSize: size.meta, lineHeight: "16px", letterSpacing: tracking.normal, color: "#202020", fontFamily: "inherit", textAlign: "center" }}
                     >

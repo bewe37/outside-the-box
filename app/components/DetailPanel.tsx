@@ -137,13 +137,25 @@ export function DetailPanel({
         {/* Scrollable body — hero + metadata */}
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: isMobile ? 12 : 16 }}>
 
-        {/* Hero */}
-        <div style={{ flexShrink: 0, paddingInline: 16 }}>
+        {/* Hero — landscape spans the full card width; portrait aligns its left
+            edge with the metadata value column. The loading shimmer always
+            spans the full card width regardless of orientation. */}
+        <div style={{ flexShrink: 0, position: "relative", paddingInline: 16, height: HERO_H }}>
+          {/* Full-width shimmer */}
+          {!heroLoaded && <div className="img-shimmer" style={{ position: "absolute", left: 16, right: 16, top: 0, height: HERO_H, zIndex: 1 }} />}
+          {/* Image container — portrait is indented to the value column via
+              left offset + reduced width so the filled image shifts right. */}
           <div
-            style={{ position: "relative", width: "100%", height: HERO_H, cursor: "zoom-in" }}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: isLandscape ? 16 : 16 + labelW + 16,
+              right: 16,
+              height: HERO_H,
+              cursor: "zoom-in",
+            }}
             onClick={() => setLightboxIndex(0)}
           >
-            {!heroLoaded && <div className="img-shimmer" style={{ position: "absolute", inset: 0, zIndex: 1 }} />}
             <Image
               src={heroSrc}
               alt={box.title}
