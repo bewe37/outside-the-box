@@ -118,9 +118,6 @@ input[type="range"].col-slider::-moz-range-thumb {
   100% { background-position: -200% 0; }
 }
 
-/* Collection strip — hide the horizontal scrollbar */
-.collection-strip::-webkit-scrollbar { display: none; }
-
 /* Index row — hover highlight handled by a shared sliding motion bar */
 .index-row {
   position: relative;

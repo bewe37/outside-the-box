@@ -33,7 +33,7 @@ import { size, tracking } from "@/lib/typography";
 import { useAuth } from "@/app/components/auth-context";
 import { supabase } from "@/lib/supabase";
 
-const CollectionStrip = dynamic(() => import("../CollectionStrip"), { ssr: false });
+const CollectionGallery3D = dynamic(() => import("../CollectionGallery3D"), { ssr: false });
 
 const centeredFlex: React.CSSProperties = {
   height: "100%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -111,7 +111,7 @@ export default function PublicCollectionPage({ params }: { params: Promise<{ use
 
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <CollectionStrip boxes={boxes} onSelect={setSelected} />
+      <CollectionGallery3D boxes={boxes} onSelect={setSelected} />
 
       {/* Viewer banner — shown to everyone since owner gets redirected */}
       <div style={{

@@ -12,7 +12,7 @@ import { DetailPanel } from "@/app/components/DetailPanel";
 import { Toast } from "@/app/components/Toast";
 import type { Session } from "@supabase/supabase-js";
 
-const CollectionStrip = dynamic(() => import("./CollectionStrip"), { ssr: false });
+const CollectionGallery3D = dynamic(() => import("./CollectionGallery3D"), { ssr: false });
 
 const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
 
@@ -233,7 +233,7 @@ function CollectionView({
 
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <CollectionStrip boxes={collectedBoxes} onSelect={handleSelect} userPhotos={userPhotos} />
+      <CollectionGallery3D boxes={collectedBoxes} onSelect={handleSelect} userPhotos={userPhotos} />
 
       {/* Share + sign out */}
       <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 10, display: "flex", gap: 8 }}>

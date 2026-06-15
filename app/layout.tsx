@@ -4,6 +4,7 @@ import "./globals.css";
 import { NavProvider } from "@/app/components/nav-context";
 import { AuthProvider } from "@/app/components/auth-context";
 import AppShell from "@/app/components/AppShell";
+import { DevDials } from "@/app/components/DevDials";
 
 const geist = Geist({
   variable: "--font-geist-sans",
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 {children}
               </div>
             </AppShell>
+            <DevDials />
           </NavProvider>
         </AuthProvider>
       </body>

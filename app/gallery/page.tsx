@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
+import { useDialKit } from "dialkit";
 import { boxes, formatNeighbourhood, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
 import { DetailPanel } from "@/app/components/DetailPanel";
 import { size, tracking, leading } from "@/lib/typography";
@@ -276,22 +277,32 @@ export default function GalleryPage() {
 // while portrait photos still read as upright cards.
 const STACK_W = 340, STACK_H = 425;
 
+// Tunable knobs for the stack geometry. Defaults match the baked-in look;
+// the dial kit (DepthStackDials) overrides these live.
+export type StackParams = {
+  spacing: number;   // px gap between each stacked card (peek)
+  blurStep: number;  // px of blur added per depth level
+};
+
+export const DEFAULT_STACK_PARAMS: StackParams = { spacing: 50, blurStep: 3 };
+
 // Geometry per depth slot. index 0 = front (large, sharp), higher = receding.
 // Anchored from the top so each card's top edge peeks a fixed gap above the
 // one in front; the shrink pulls the bottom up and never hides the peek.
-function slotGeo(i: number) {
+function slotGeo(i: number, p: StackParams) {
   return {
-    y: -i * 40,                            // gap above the front card
-    scale: 1 - i * 0.08,                   // 1, .92, .84, .76 — recede
-    blur: i === 0 ? 0 : 3 + (i - 1) * 3,   // 0, 3, 6, 9 px
-    opacity: 1 - i * 0.12,                 // 1, .88, .76, .64
+    y: -i * p.spacing,                          // gap above the front card
+    scale: 1 - i * 0.08,                        // 1, .92, .84, .76 — recede
+    blur: i === 0 ? 0 : p.blurStep + (i - 1) * p.blurStep, // 0, step, 2·step…
+    opacity: 1 - i * 0.12,                      // 1, .88, .76, .64
   };
 }
 
 // A single card. It animates between depth slots as `depth` changes, and
 // fades/blurs in when it enters at the back, out the front when it leaves.
-function StackCard({ src, depth }: { src: string; depth: number }) {
-  const g = slotGeo(depth);
+// The `spring` (from DialKit) drives the position/scale settle.
+function StackCard({ src, depth, params, spring }: { src: string; depth: number; params: StackParams; spring: object }) {
+  const g = slotGeo(depth, params);
   return (
     <motion.div
       layout
@@ -314,9 +325,9 @@ function StackCard({ src, depth }: { src: string; depth: number }) {
         filter: "blur(5px)",
       }}
       transition={{
-        layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-        y: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
-        scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        layout: spring,
+        y: spring,
+        scale: spring,
         opacity: { duration: 0.22, ease: "easeOut" },
         filter: { duration: 0.22, ease: "easeOut" },
       }}
@@ -339,7 +350,7 @@ function StackCard({ src, depth }: { src: string; depth: number }) {
   );
 }
 
-function DepthStack({ srcs, visible }: { srcs: string[]; visible: boolean }) {
+function DepthStack({ srcs, visible, params, spring }: { srcs: string[]; visible: boolean; params: StackParams; spring: object }) {
   const cards = srcs.slice(0, 4);
 
   return (
@@ -366,7 +377,7 @@ function DepthStack({ srcs, visible }: { srcs: string[]; visible: boolean }) {
               shift forward, and a new card enters at the back. */}
           <AnimatePresence>
             {cards.map((src, depth) => (
-              <StackCard key={src} src={src} depth={depth} />
+              <StackCard key={src} src={src} depth={depth} params={params} spring={spring} />
             ))}
           </AnimatePresence>
         </motion.div>
@@ -387,6 +398,20 @@ function IndexView({
   const [hovered, setHovered] = useState<Box | null>(null);
   const hoveredIndex = hovered ? boxes.findIndex(b => b.id === hovered.id) : -1;
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // ── DialKit: live controls for the depth-stack hover animation ──────────────
+  // Spacing = px gap between each stacked card. Blur = px added per depth level.
+  // The animation spring drives how cards settle as they shift between depths.
+  const dials = useDialKit("Index Stack", {
+    spacing: [DEFAULT_STACK_PARAMS.spacing, 0, 120],   // [default, min, max]
+    blurStep: [DEFAULT_STACK_PARAMS.blurStep, 0, 16],
+    spring: {
+      type: "spring",
+      visualDuration: 0.5,
+      bounce: 0.18,
+    },
+  });
+  const stackParams: StackParams = { spacing: dials.spacing, blurStep: dials.blurStep };
 
   // front = hovered box, then next 3 boxes looping
   const srcs = useMemo(() => {
@@ -422,7 +447,7 @@ function IndexView({
         paddingInline: 32,
       }}
     >
-      <DepthStack srcs={srcs} visible={hovered !== null} />
+      <DepthStack srcs={srcs} visible={hovered !== null} params={stackParams} spring={dials.spring} />
 
       {/* Shared sliding highlight — spans full viewport width, follows the
           hovered row instead of re-rendering per row. */}
