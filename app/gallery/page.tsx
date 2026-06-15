@@ -272,7 +272,9 @@ export default function GalleryPage() {
 
 // ─── Motion depth stack (fixed, viewport-centered) ────────────────────────────
 
-const STACK_W = 300, STACK_H = 400;
+// 4:5 frame — gentler than 3:4, so landscape photos lose less to the crop
+// while portrait photos still read as upright cards.
+const STACK_W = 340, STACK_H = 425;
 
 // Geometry per depth slot. index 0 = front (large, sharp), higher = receding.
 // Anchored from the top so each card's top edge peeks a fixed gap above the
