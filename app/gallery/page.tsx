@@ -309,22 +309,27 @@ function StackCard({ src, depth, params, spring }: { src: string; depth: number;
       // Position animated via `y` (not layout), so a new card starts AT its own
       // slot + a tiny 8px rise — never flashing high. Surviving cards animate
       // their y from the old slot to the new one as depth changes.
-      initial={{ opacity: 0, y: g.y + 8 }}
+      initial={{ opacity: 0, y: g.y + 8, boxShadow: "0 12px 48px rgba(0,0,0,0)", filter: `blur(${g.blur}px)` }}
       animate={{
         opacity: g.opacity,
         y: g.y,
         scale: g.scale,
         filter: `blur(${g.blur}px)`,
+        // Only the front card carries a shadow; it fades in/out with the card.
+        boxShadow: depth === 0 ? "0 12px 48px rgba(0,0,0,0.16)" : "0 12px 48px rgba(0,0,0,0)",
       }}
       exit={{
         opacity: 0,
-        filter: `blur(${params.exitBlur}px)`,
-        transition: { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+        // fade the shadow to nothing + a touch of blur as the card leaves
+        boxShadow: "0 12px 48px rgba(0,0,0,0)",
+        filter: `blur(${g.blur + 6}px)`,
+        transition: { duration: 0.3, ease: "easeOut" },
       }}
       transition={{
         y: spring,
         scale: spring,
-        opacity: { duration: 0.4, ease: "easeOut" },
+        opacity: { duration: 0.3, ease: "easeOut" },
+        boxShadow: { duration: 0.3, ease: "easeOut" },
         filter: { duration: 0.3, ease: "easeOut" },
       }}
       style={{
@@ -336,7 +341,6 @@ function StackCard({ src, depth, params, spring }: { src: string; depth: number;
         transformOrigin: "center top",
         zIndex: 10 - depth,
         overflow: "hidden",
-        boxShadow: depth === 0 ? "0 12px 48px rgba(0,0,0,0.16)" : undefined,
         backgroundColor: "#E8E8E8",
       }}
     >
