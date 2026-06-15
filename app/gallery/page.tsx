@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
-import { boxes, formatNeighbourhood, formatYear, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
+import { boxes, formatNeighbourhood, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
 import { DetailPanel } from "@/app/components/DetailPanel";
 import { size, tracking, leading } from "@/lib/typography";
 import { useNav } from "@/app/components/nav-context";
@@ -28,6 +28,7 @@ const BLUR_PLACEHOLDER =
 function imgUrl(box: Box): string {
   return box.images?.[0] ?? "";
 }
+
 
 
 // ─── Index page ───────────────────────────────────────────────────────────────
@@ -269,24 +270,107 @@ export default function GalleryPage() {
 
 // ─── Index view ───────────────────────────────────────────────────────────────
 
-// Preview is pinned to the hovered row's vertical position at a fixed X past
-// the text columns. Its actual width/height is derived per-image from the
-// photo's natural aspect ratio (see previewSize below).
-const HOVER_PREVIEW = {
-  left: 1180,        // pinned X: 32px padding + 1140px columns + 8px gap
-  maxEdge: 280,      // bounding box for either dimension
-  fallback: { width: 200, height: 280 }, // before aspect is known
-};
+// ─── Motion depth stack (fixed, viewport-centered) ────────────────────────────
 
-// Fit (maxEdge × maxEdge) box while preserving an aspect ratio. Landscapes
-// become wider+shorter, portraits taller+narrower.
-function previewSize(aspect: number): { width: number; height: number } {
-  if (aspect >= 1) {
-    // Landscape or square — width hits max, height shrinks.
-    return { width: HOVER_PREVIEW.maxEdge, height: Math.round(HOVER_PREVIEW.maxEdge / aspect) };
-  }
-  // Portrait — height hits max, width shrinks.
-  return { width: Math.round(HOVER_PREVIEW.maxEdge * aspect), height: HOVER_PREVIEW.maxEdge };
+const STACK_W = 300, STACK_H = 400;
+
+// Geometry per depth slot. index 0 = front (large, sharp), higher = receding.
+// Anchored from the top so each card's top edge peeks a fixed gap above the
+// one in front; the shrink pulls the bottom up and never hides the peek.
+function slotGeo(i: number) {
+  return {
+    y: -i * 40,                            // gap above the front card
+    scale: 1 - i * 0.08,                   // 1, .92, .84, .76 — recede
+    blur: i === 0 ? 0 : 3 + (i - 1) * 3,   // 0, 3, 6, 9 px
+    opacity: 1 - i * 0.12,                 // 1, .88, .76, .64
+  };
+}
+
+// A single card. It animates between depth slots as `depth` changes, and
+// fades/blurs in when it enters at the back, out the front when it leaves.
+function StackCard({ src, depth }: { src: string; depth: number }) {
+  const g = slotGeo(depth);
+  return (
+    <motion.div
+      layout
+      initial={{
+        // enters at its own slot — just fades in, no vertical lift
+        y: g.y,
+        scale: g.scale,
+        opacity: 0,
+        filter: `blur(${g.blur}px)`,
+      }}
+      animate={{
+        y: g.y,
+        scale: g.scale,
+        opacity: g.opacity,
+        filter: `blur(${g.blur}px)`,
+      }}
+      exit={{
+        // quick, light fade-out so rapid movement doesn't pile up heavy blur
+        opacity: 0,
+        filter: "blur(5px)",
+      }}
+      transition={{
+        layout: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        y: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        scale: { duration: 0.5, ease: [0.22, 1, 0.36, 1] },
+        opacity: { duration: 0.22, ease: "easeOut" },
+        filter: { duration: 0.22, ease: "easeOut" },
+      }}
+      style={{
+        position: "absolute",
+        width: STACK_W,
+        height: STACK_H,
+        left: 0,
+        top: 0,
+        overflow: "hidden",
+        transformOrigin: "center top",
+        zIndex: 10 - depth,
+        boxShadow: depth === 0 ? "0 12px 48px rgba(0,0,0,0.16)" : undefined,
+        backgroundColor: "#E8E8E8",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(1.1)" }} />
+    </motion.div>
+  );
+}
+
+function DepthStack({ srcs, visible }: { srcs: string[]; visible: boolean }) {
+  const cards = srcs.slice(0, 4);
+
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          style={{
+            position: "fixed",
+            left: "50%",
+            top: "50%",
+            transform: "translate(-50%, -50%)",
+            width: STACK_W,
+            height: STACK_H,
+            pointerEvents: "none",
+            zIndex: 40,
+          }}
+        >
+          {/* Each card keyed by its image so motion can move it between depth
+              slots — when the hovered item changes, the front exits, the rest
+              shift forward, and a new card enters at the back. */}
+          <AnimatePresence>
+            {cards.map((src, depth) => (
+              <StackCard key={src} src={src} depth={depth} />
+            ))}
+          </AnimatePresence>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 }
 
 function IndexView({
@@ -299,62 +383,83 @@ function IndexView({
   onSelect: (b: Box) => void;
 }) {
   const [hovered, setHovered] = useState<Box | null>(null);
-  const [rowTop, setRowTop] = useState(0);
-  // box.id → aspect ratio (width / height). Loaded lazily on first hover.
-  const [aspects, setAspects] = useState<Map<number, number>>(new Map());
+  const hoveredIndex = hovered ? boxes.findIndex(b => b.id === hovered.id) : -1;
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // On row enter, measure the row's offset within the scroll container so the
-  // preview can pin to its vertical position. Only updates per row — not on
-  // every cursor move within the row.
-  function handleRowEnter(box: Box, e: React.MouseEvent) {
-    const container = containerRef.current;
-    if (!container) return;
-    const rowRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    setRowTop(rowRect.top - containerRect.top + container.scrollTop);
-    setHovered(box);
+  // front = hovered box, then next 3 boxes looping
+  const srcs = useMemo(() => {
+    if (hoveredIndex < 0 || boxes.length === 0) return [];
+    return Array.from({ length: 4 }, (_, i) => {
+      const idx = (hoveredIndex + i) % boxes.length;
+      return boxes[idx]?.images?.[0] ?? "";
+    }).filter(Boolean);
+  }, [hoveredIndex, boxes]);
 
-    // Lazy-load the cover photo's natural dimensions on first hover. Cached
-    // afterwards so re-hovering the same row is instant.
-    if (!aspects.has(box.id)) {
-      const src = imgUrl(box);
-      if (!src) return;
-      const img = new window.Image();
-      img.onload = () => {
-        if (img.naturalWidth && img.naturalHeight) {
-          setAspects((prev) => new Map(prev).set(box.id, img.naturalWidth / img.naturalHeight));
-        }
-      };
-      img.src = src;
+  // Track each row's geometry so the shared highlight bar can slide to it.
+  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [highlight, setHighlight] = useState<{ top: number; height: number } | null>(null);
+
+  function handleHover(box: Box) {
+    setHovered(box);
+    const el = rowRefs.current.get(box.id);
+    const container = containerRef.current;
+    if (el && container) {
+      setHighlight({ top: el.offsetTop, height: el.offsetHeight });
     }
   }
-
-  const hoveredAspect = hovered ? aspects.get(hovered.id) : undefined;
-  const hoveredSize = hoveredAspect ? previewSize(hoveredAspect) : HOVER_PREVIEW.fallback;
-  // Clamp so the preview never extends below the container's scroll height.
-  const container = containerRef.current;
-  const maxTop = container ? container.scrollTop + container.clientHeight - hoveredSize.height - 24 : rowTop;
-  const clampedTop = Math.min(rowTop, maxTop);
 
   return (
     <div
       ref={containerRef}
+      onMouseLeave={() => { setHovered(null); }}
       style={{
         flex: 1,
         position: "relative",
         overflowY: "auto",
-        paddingTop: 64,
+        paddingTop: 24,
         paddingInline: 32,
       }}
     >
+      <DepthStack srcs={srcs} visible={hovered !== null} />
+
+      {/* Shared sliding highlight — spans full viewport width, follows the
+          hovered row instead of re-rendering per row. */}
+      <AnimatePresence>
+        {hovered && highlight && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, top: highlight.top, height: highlight.height }}
+            exit={{ opacity: 0 }}
+            transition={{
+              opacity: { duration: 0.15 },
+              top: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+              height: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
+            }}
+            style={{
+              position: "absolute",
+              // extend past the 32px container padding to reach the viewport edges
+              left: -32,
+              right: -32,
+              top: highlight.top,
+              height: highlight.height,
+              backgroundColor: "#F7F7F7",
+              pointerEvents: "none",
+              zIndex: 0,
+            }}
+          />
+        )}
+      </AnimatePresence>
+
       {boxes.map((box, i) => (
         <motion.div
           key={box.id}
+          ref={(el) => {
+            if (el) rowRefs.current.set(box.id, el);
+            else rowRefs.current.delete(box.id);
+          }}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.22, delay: i * 0.035, ease: [0.25, 0.1, 0.25, 1] }}
-          style={{ width: "fit-content" }}
         >
           <IndexRow
             box={box}
@@ -362,45 +467,13 @@ function IndexView({
             isSelected={false}
             isDimmed={hovered !== null && hovered.id !== box.id}
             isCollected={collected.has(box.id)}
+            isHovered={hovered?.id === box.id}
             onSelect={() => onSelect(box)}
-            onMouseEnter={(e) => handleRowEnter(box, e)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={() => handleHover(box)}
+            onMouseLeave={() => {}}
           />
         </motion.div>
       ))}
-
-      {/* Row-pinned hover preview. Positioned at a fixed X past the text columns. */}
-      <AnimatePresence>
-        {hovered && (
-          <motion.div
-            key={hovered.id}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.12, ease: "easeOut" }}
-            style={{
-              position: "absolute",
-              left: HOVER_PREVIEW.left,
-              top: clampedTop,
-              width: hoveredSize.width,
-              height: hoveredSize.height,
-              overflow: "hidden",
-              pointerEvents: "none",
-              zIndex: 10,
-              willChange: "opacity",
-              boxShadow: "0 10px 32px rgba(0, 0, 0, 0.12)",
-              backgroundColor: "#FFFFFF",
-            }}
-          >
-            <Image
-              src={imgUrl(hovered)}
-              alt={hovered.title}
-              fill
-              style={{ objectFit: "cover" }}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
       <div style={{ paddingTop: 40, paddingBottom: 24, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>
         Last updated June 1, 2026 · {boxes.length} boxes
       </div>
@@ -414,6 +487,7 @@ function IndexRow({
   isSelected,
   isDimmed,
   isCollected,
+  isHovered,
   onSelect,
   onMouseEnter,
   onMouseLeave,
@@ -423,8 +497,9 @@ function IndexRow({
   isSelected: boolean;
   isDimmed: boolean;
   isCollected: boolean;
+  isHovered: boolean;
   onSelect: () => void;
-  onMouseEnter: (e: React.MouseEvent) => void;
+  onMouseEnter: () => void;
   onMouseLeave: () => void;
 }) {
   const textColor = isDimmed ? "#D3D3D3" : "#202020";
@@ -439,159 +514,50 @@ function IndexRow({
       style={{
         display: "flex",
         alignItems: "center",
-        paddingBlock: 12,
+        paddingBlock: 10,
         paddingInline: 0,
         background: "none",
         border: "none",
         borderBottom: "none",
         cursor: "pointer",
         textAlign: "left",
-        width: "fit-content",
+        width: "100%",
         fontFamily: "inherit",
         fontWeight: 400,
+        position: "relative",
       }}
     >
-      {/* Inner row — becomes full-width flex on mobile */}
-      <div className="index-row-inner" style={{ display: "flex", alignItems: "center" }}>
+      {/* Left group: (number) TITLE */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: "0 0 auto" }}>
+        <span style={{ flexShrink: 0, fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
+          ({String(displayNumber).padStart(2, "0")})
+        </span>
+        <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
+          {box.title}
+        </span>
+      </div>
 
-        {/* Number + Title — 400px */}
-        <div style={{ width: 400, flexShrink: 0, display: "flex", flexDirection: "column", paddingLeft: 0, paddingRight: 48, boxSizing: "border-box", gap: 2 }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-            <span
-              style={{
-                flexShrink: 0,
-                fontSize: size.meta,
-                lineHeight: leading.meta,
-                letterSpacing: tracking.label,
-                textTransform: "uppercase",
-                color: textColor,
-                transition,
-              }}
-            >
-              ({String(displayNumber).padStart(2, "0")})
-            </span>
-            <span
-              style={{
-                fontSize: size.meta,
-                lineHeight: leading.meta,
-                letterSpacing: tracking.label,
-                textTransform: "uppercase",
-                color: textColor,
-                transition,
-              }}
-            >
-              {box.title}
-            </span>
-          </div>
-          {/* Date — only visible on mobile */}
-          <span
-            className="index-date"
-            style={{
-              display: "none",
-              fontSize: size.caption,
-              lineHeight: leading.caption,
-              letterSpacing: tracking.label,
-              color: textColor,
-              transition,
-            }}
-          >
-            {box.captured}
-          </span>
-        </div>
+      {/* Spacer — the global fixed stack floats over this area */}
+      <div style={{ flex: 1 }} />
 
-        {/* Artist — 240px */}
-        <span
-          className="index-col"
-          style={{
-            width: 240,
-            flexShrink: 0,
-            paddingRight: 48,
-            boxSizing: "border-box",
-            fontSize: size.meta,
-            lineHeight: leading.meta,
-            letterSpacing: tracking.label,
-            textTransform: "uppercase",
-            color: textColor,
-            transition,
-          }}
-        >
+      {/* Right group: ARTIST · NEIGHBOURHOOD — adjacent, flush right */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "0 0 auto" }}>
+        <span className="index-col" style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
           {box.artist}
         </span>
-
-        {/* Address — 280px */}
-        <span
-          className="index-col"
-          style={{
-            width: 280,
-            flexShrink: 0,
-            paddingRight: 48,
-            boxSizing: "border-box",
-            fontSize: size.meta,
-            lineHeight: leading.meta,
-            letterSpacing: tracking.label,
-            textTransform: "uppercase",
-            color: textColor,
-            transition,
-          }}
-        >
-          {formatAddress(box.address)}
-        </span>
-
-        {/* Neighbourhood — 220px */}
-        <span
-          className="index-col"
-          style={{
-            width: 220,
-            flexShrink: 0,
-            fontSize: size.meta,
-            lineHeight: leading.meta,
-            letterSpacing: tracking.label,
-            textTransform: "uppercase",
-            color: textColor,
-            transition,
-          }}
-        >
+        {/* Dot separator — floats between artist and neighbourhood */}
+        <span style={{ width: 3, height: 3, borderRadius: "50%", flexShrink: 0, backgroundColor: textColor, display: "inline-block", transition }} />
+        <span className="index-col" style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
           {formatNeighbourhood(box.neighbourhood)}
         </span>
-
-        {/* Collected dot */}
-        <span
-          style={{
-            marginLeft: 16,
-            marginRight: 16,
-            width: 5,
-            height: 5,
-            borderRadius: "50%",
-            flexShrink: 0,
-            backgroundColor: isCollected ? "#202020" : "transparent",
-            display: "inline-block",
-            transition,
-          }}
-        />
-
-        {/* Thumbnail — only visible on mobile */}
-        {box.images?.[0] && (
-          <div
-            className="index-thumb"
-            style={{
-              display: "none",
-              width: 72,
-              height: 72,
-              flexShrink: 0,
-              overflow: "hidden",
-              marginLeft: 16,
-            }}
-          >
-            <Image
-              src={box.images[0]}
-              alt={box.title}
-              width={80}
-              height={80}
-              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          </div>
-        )}
       </div>
+
+      {/* Mobile thumbnail */}
+      {box.images?.[0] && (
+        <div className="index-thumb" style={{ display: "none", width: 48, height: 48, flexShrink: 0, overflow: "hidden", marginLeft: 12 }}>
+          <Image src={box.images[0]} alt={box.title} width={48} height={48} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        </div>
+      )}
     </button>
   );
 }

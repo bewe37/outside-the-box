@@ -118,12 +118,13 @@ input[type="range"].col-slider::-moz-range-thumb {
   100% { background-position: -200% 0; }
 }
 
-/* Index row */
+/* Collection strip — hide the horizontal scrollbar */
+.collection-strip::-webkit-scrollbar { display: none; }
+
+/* Index row — hover highlight handled by a shared sliding motion bar */
 .index-row {
-  transition: background-color 0.15s ease;
-}
-.index-row:hover {
-  background-color: #F7F7F7 !important;
+  position: relative;
+  z-index: 1;
 }
 
 /* Lightbox nav arrows */
@@ -182,10 +183,13 @@ input[type="range"].col-slider::-moz-range-thumb {
   .index-thumb { display: block !important; }
   .index-date { display: block !important; }
 
+  /* Mobile nav is 48px — adjust the reserved space */
+  .page-shell { padding-top: 48px !important; }
+
   /* Grid view — force 2 columns on mobile, tighter gaps */
   .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
   .masonry-card { margin-bottom: 12px !important; }
-  .photos-scroll { padding: 12px !important; padding-top: 56px !important; }
+  .photos-scroll { padding: 12px !important; }
 
   /* About page — stack sections normally, no indent */
   .about-sections {

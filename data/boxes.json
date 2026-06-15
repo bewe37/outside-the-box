@@ -622,5 +622,19 @@
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337030990-w7jd4z1mb1g.jpg",
       "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337032272-4hxghqqb4bk.jpg"
     ]
+  },
+  {
+    "id": 59,
+    "title": "UNKNOWN TITLE",
+    "address": "1545 Dundas St W",
+    "neighbourhood": "LITTLE PORTUGAL",
+    "artist": "Unknown",
+    "year": "UNKNOWN",
+    "captured": "6/1/26",
+    "description": "",
+    "images": [
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337855712-q5gu71vjvqh.jpg",
+      "https://8wqgyanphwwowefe.public.blob.vercel-storage.com/boxes/1780337856841-9v2nm2saf34.jpg"
+    ]
   }
 ]

@@ -9,8 +9,13 @@ import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
 import { supabase } from "@/lib/supabase";
 
-function NavPageLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+function NavPageLink({ href, label, active, adaptive }: { href: string; label: string; active: boolean; adaptive: boolean }) {
   const [hovered, setHovered] = useState(false);
+  // In difference blend mode, white inverts to readable dark on light areas
+  // and stays white on dark areas. Inactive links use a mid grey that reads
+  // as muted in both modes.
+  const activeColor = adaptive ? "#FFFFFF" : "#202020";
+  const mutedColor = adaptive ? "#888888" : "#A8A8A8";
   return (
     <Link
       href={href}
@@ -21,7 +26,7 @@ function NavPageLink({ href, label, active }: { href: string; label: string; act
         lineHeight: leading.meta,
         letterSpacing: tracking.label,
         textTransform: "uppercase",
-        color: active || hovered ? "#202020" : "#A8A8A8",
+        color: active || hovered ? activeColor : mutedColor,
         textDecoration: "none",
         transition: "color 0.15s ease",
         fontWeight: 500,
@@ -97,7 +102,7 @@ export function SiteNav() {
       {/* Nav links — right */}
       <div className="nav-page-links">
         {links.map(({ href, label }) => (
-          <NavPageLink key={href} href={href} label={label} active={pathname === href} />
+          <NavPageLink key={href} href={href} label={label} active={pathname === href} adaptive={false} />
         ))}
       </div>
     </div>

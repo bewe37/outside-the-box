@@ -148,7 +148,7 @@ export function DetailPanel({
               src={heroSrc}
               alt={box.title}
               fill
-              style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease", filter: "saturate(1.15)" }}
+              style={{ objectFit: isLandscape ? "cover" : "contain", objectPosition: isLandscape ? "center" : "right center", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease", filter: "saturate(1.15)" }}
               onLoad={() => setTimeout(() => setHeroLoaded(true), 80)}
             />
           </div>
