@@ -76,6 +76,8 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
   const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meshesRef = useRef<THREE.Mesh[]>([]);
   const layoutRef = useRef<{ cx: number; hw: number }[]>([]);
+  // Uniform per-card slot width used for the looping layout (widest card + gap).
+  const slotWidthRef = useRef(CARD_H * 0.8 + GAP);
   const mouse = useRef({ x: 0, y: 0 });
   const boxesRef = useRef(boxes);
   boxesRef.current = boxes;
@@ -118,12 +120,9 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
         mesh.geometry = newGeo;
 
         layout[i].hw = newW / 2;
-        let x = i === 0 ? 0 : layout[i - 1].cx + layout[i - 1].hw + GAP;
-        for (let j = i; j < layout.length; j++) {
-          layout[j].cx = x + layout[j].hw;
-          x = layout[j].cx + layout[j].hw + GAP;
-          meshes[j].position.x = layout[j].cx;
-        }
+        // Keep the uniform slot wide enough for the widest card (+ gap) so the
+        // looping layout never overlaps. The frame loop positions x from this.
+        slotWidthRef.current = Math.max(slotWidthRef.current, newW + GAP);
 
         const shader = mesh.material as THREE.ShaderMaterial;
         shader.uniforms.uMap.value = tex;
@@ -149,24 +148,19 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     const el = document.querySelector("canvas");
     if (!el) return;
 
-    // After input stops, snap to the nearest whole card.
+    // After input stops, snap to the nearest whole card. No clamping — the
+    // carousel loops, and the frame loop wraps the offset for display.
     const scheduleSnap = () => {
       if (snapTimer.current) clearTimeout(snapTimer.current);
       snapTimer.current = setTimeout(() => {
-        targetFocus.current = Math.max(
-          0,
-          Math.min(meshesRef.current.length - 1, Math.round(targetFocus.current))
-        );
+        targetFocus.current = Math.round(targetFocus.current);
       }, 90);
     };
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      targetFocus.current = Math.max(
-        0,
-        Math.min(meshesRef.current.length - 1, targetFocus.current + delta * SENSITIVITY)
-      );
+      targetFocus.current += delta * SENSITIVITY;
       scheduleSnap();
     };
 
@@ -175,10 +169,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     const onTouchMove = (e: TouchEvent) => {
       const dx = lx - e.touches[0].clientX;
       lx = e.touches[0].clientX;
-      targetFocus.current = Math.max(
-        0,
-        Math.min(meshesRef.current.length - 1, targetFocus.current + dx * SENSITIVITY * 2)
-      );
+      targetFocus.current += dx * SENSITIVITY * 2;
     };
     const onTouchEnd = () => scheduleSnap();
 
@@ -204,17 +195,29 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     return () => window.removeEventListener("mousemove", onMove);
   }, []);
 
-  // Arrow keys step one image at a time (lands on a whole card — same as snap).
+  // Arrow keys step one image at a time; Enter opens the focused image.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-      if (!dir) return;
-      // When the detail panel is open it owns arrow-key navigation; don't move
-      // the carousel underneath it.
+      // The detail panel, when open, owns keyboard nav — don't act underneath it.
       if (document.querySelector(".lightbox-modal")) return;
+      const n = meshesRef.current.length;
+      if (n === 0) return;
+
+      // Enter → open the detail panel for the centred (focused) image.
+      if (e.key === "Enter") {
+        const idx = ((Math.round(focusRef.current) % n) + n) % n; // wrapped
+        const box = boxesRef.current[idx];
+        if (box) { e.preventDefault(); onSelectRef.current(box); }
+        return;
+      }
+
+      const dir =
+        e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 :
+        e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+      if (!dir) return;
       e.preventDefault();
-      const max = meshesRef.current.length - 1;
-      targetFocus.current = Math.max(0, Math.min(max, Math.round(targetFocus.current) + dir));
+      // Step one card from the current rest position — no clamping, so it loops.
+      targetFocus.current = Math.round(focusRef.current) + dir;
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -247,19 +250,26 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
   useFrame(({ camera }) => {
     focusRef.current += (targetFocus.current - focusRef.current) * (1 - DAMPING);
     const f = focusRef.current;
+    const n = meshesRef.current.length;
+    if (n === 0) return;
 
-    const layout = layoutRef.current;
-    const fi = Math.min(Math.floor(f), layout.length - 1);
-    const frac = f - fi;
-    const aX = layout[fi]?.cx ?? fi * 2;
-    const bX = layout[Math.min(fi + 1, layout.length - 1)]?.cx ?? aX;
-    const targetCamX = THREE.MathUtils.lerp(aX, bX, Math.max(0, frac));
-
-    camera.position.x += (targetCamX - camera.position.x) * 0.1;
+    // Camera stays centred; cards are positioned by their wrapped offset from
+    // focus so the row loops seamlessly in both directions.
+    camera.position.x += (0 - camera.position.x) * 0.1;
     camera.position.y += (-mouse.current.y * 0.15 - camera.position.y) * 0.06;
 
+    const layout = layoutRef.current;
+
     meshesRef.current.forEach((mesh, i) => {
-      const offset = i - f;
+      // Wrap the index distance into [-n/2, n/2] so cards recycle around.
+      let offset = i - f;
+      offset = ((offset % n) + n) % n; // 0..n
+      if (offset > n / 2) offset -= n;  // -n/2..n/2
+
+      // x position: a single uniform slot width for every card so the loop
+      // seam is invisible and cards never overlap.
+      mesh.position.x = offset * slotWidthRef.current;
+
       const { z, ry, scale, dim } = cardTransform(offset);
       mesh.position.z = z;
       mesh.rotation.y = ry;
