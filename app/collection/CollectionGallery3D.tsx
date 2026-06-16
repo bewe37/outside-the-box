@@ -16,7 +16,7 @@ const FOCUS_SCALE = 1.0;
 const EDGE_SCALE = 0.82;
 const EDGE_DIM = 0.55;
 // Higher = slower, smoother settle. Tuned to feel like the index image stack.
-const DAMPING = 0.92;
+const DAMPING = 0.94;
 const SENSITIVITY = 0.004;
 const SATURATION = 1.15;
 
