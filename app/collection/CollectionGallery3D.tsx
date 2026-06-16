@@ -204,6 +204,22 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     return () => window.removeEventListener("mousemove", onMove);
   }, []);
 
+  // Arrow keys step one image at a time (lands on a whole card — same as snap).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (!dir) return;
+      // When the detail panel is open it owns arrow-key navigation; don't move
+      // the carousel underneath it.
+      if (document.querySelector(".lightbox-modal")) return;
+      e.preventDefault();
+      const max = meshesRef.current.length - 1;
+      targetFocus.current = Math.max(0, Math.min(max, Math.round(targetFocus.current) + dir));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Click → raycast → open lightbox for the hit card
   useEffect(() => {
     const el = document.querySelector("canvas");
