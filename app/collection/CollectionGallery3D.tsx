@@ -76,8 +76,27 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
   const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meshesRef = useRef<THREE.Mesh[]>([]);
   const layoutRef = useRef<{ cx: number; hw: number }[]>([]);
-  // Uniform per-card slot width used for the looping layout (widest card + gap).
-  const slotWidthRef = useRef(CARD_H * 0.8 + GAP);
+  // Looping layout: each card's cumulative centre offset (in index space, using
+  // real widths so spacing is tight) and the total wrap length.
+  const posRef = useRef<number[]>([]);
+  const totalRef = useRef(1);
+
+  // Recompute cumulative centre positions from the current per-card widths.
+  const rebuildPositions = () => {
+    const layout = layoutRef.current;
+    const n = layout.length;
+    if (n === 0) return;
+    const pos: number[] = [];
+    let x = 0;
+    for (let i = 0; i < n; i++) {
+      const hw = layout[i]?.hw ?? CARD_H * 0.4;
+      x += hw;
+      pos.push(x);
+      x += hw + GAP;
+    }
+    posRef.current = pos;
+    totalRef.current = x; // full row length incl. trailing gap → seamless wrap
+  };
   const mouse = useRef({ x: 0, y: 0 });
   const boxesRef = useRef(boxes);
   boxesRef.current = boxes;
@@ -120,9 +139,8 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
         mesh.geometry = newGeo;
 
         layout[i].hw = newW / 2;
-        // Keep the uniform slot wide enough for the widest card (+ gap) so the
-        // looping layout never overlaps. The frame loop positions x from this.
-        slotWidthRef.current = Math.max(slotWidthRef.current, newW + GAP);
+        // Recompute the tight cumulative layout now this card's width is known.
+        rebuildPositions();
 
         const shader = mesh.material as THREE.ShaderMaterial;
         shader.uniforms.uMap.value = tex;
@@ -134,6 +152,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
 
     meshesRef.current = meshes;
     layoutRef.current = layout;
+    rebuildPositions();
 
     return () => {
       meshes.forEach((m) => {
@@ -258,17 +277,28 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     camera.position.x += (0 - camera.position.x) * 0.1;
     camera.position.y += (-mouse.current.y * 0.15 - camera.position.y) * 0.06;
 
-    const layout = layoutRef.current;
+    const pos = posRef.current;
+    const total = totalRef.current;
+    if (pos.length !== n || total <= 0) return;
+
+    // Focus position in pixel space (interpolated between the two nearest cards).
+    const fi = ((Math.floor(f) % n) + n) % n;
+    const frac = f - Math.floor(f);
+    const a = pos[fi];
+    const b = pos[(fi + 1) % n] + (fi + 1 >= n ? total : 0); // unwrap across seam
+    const focusX = a + (b - a) * frac;
 
     meshesRef.current.forEach((mesh, i) => {
-      // Wrap the index distance into [-n/2, n/2] so cards recycle around.
-      let offset = i - f;
-      offset = ((offset % n) + n) % n; // 0..n
-      if (offset > n / 2) offset -= n;  // -n/2..n/2
+      // x: distance from focus, wrapped into [-total/2, total/2] so cards recycle.
+      let x = pos[i] - focusX;
+      x = ((x % total) + total) % total;
+      if (x > total / 2) x -= total;
+      mesh.position.x = x;
 
-      // x position: a single uniform slot width for every card so the loop
-      // seam is invisible and cards never overlap.
-      mesh.position.x = offset * slotWidthRef.current;
+      // Index-space offset for the arc transform (z/tilt/scale/dim).
+      let offset = i - f;
+      offset = ((offset % n) + n) % n;
+      if (offset > n / 2) offset -= n;
 
       const { z, ry, scale, dim } = cardTransform(offset);
       mesh.position.z = z;
