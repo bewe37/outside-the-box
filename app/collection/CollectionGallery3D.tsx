@@ -72,6 +72,8 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
   const { scene, camera } = useThree();
   const focusRef = useRef(0);
   const targetFocus = useRef(0);
+  // Debounce timer: after scroll/swipe stops, snap targetFocus to the nearest card.
+  const snapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const meshesRef = useRef<THREE.Mesh[]>([]);
   const layoutRef = useRef<{ cx: number; hw: number }[]>([]);
   const mouse = useRef({ x: 0, y: 0 });
@@ -147,6 +149,17 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     const el = document.querySelector("canvas");
     if (!el) return;
 
+    // After input stops, snap to the nearest whole card.
+    const scheduleSnap = () => {
+      if (snapTimer.current) clearTimeout(snapTimer.current);
+      snapTimer.current = setTimeout(() => {
+        targetFocus.current = Math.max(
+          0,
+          Math.min(meshesRef.current.length - 1, Math.round(targetFocus.current))
+        );
+      }, 90);
+    };
+
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
@@ -154,6 +167,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
         0,
         Math.min(meshesRef.current.length - 1, targetFocus.current + delta * SENSITIVITY)
       );
+      scheduleSnap();
     };
 
     let lx = 0;
@@ -166,14 +180,18 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
         Math.min(meshesRef.current.length - 1, targetFocus.current + dx * SENSITIVITY * 2)
       );
     };
+    const onTouchEnd = () => scheduleSnap();
 
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("touchstart", onTouchStart, { passive: true });
     el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
     return () => {
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("touchstart", onTouchStart);
       el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      if (snapTimer.current) clearTimeout(snapTimer.current);
     };
   }, []);
 

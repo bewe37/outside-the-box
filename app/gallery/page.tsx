@@ -272,9 +272,9 @@ export default function GalleryPage() {
 
 // ─── Motion depth stack (fixed, viewport-centered) ────────────────────────────
 
-// Portrait-leaning 4:5 frame with object-fit: cover — full-bleed, no bars.
-// Favours portrait photos (most of the set); landscape crops to the center.
-const STACK_W = 340, STACK_H = 425;
+// 2:3 frame — matches the portrait photos exactly so they show uncropped
+// (object-fit: cover). Landscape photos crop to their center.
+const STACK_W = 300, STACK_H = 450;
 
 // Tunable knobs for the stack geometry. Defaults match the baked-in look;
 // the dial kit (DepthStackDials) overrides these live.
