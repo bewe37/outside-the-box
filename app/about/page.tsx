@@ -43,6 +43,19 @@ export default function AboutPage() {
   const trailImagesRef = useRef(trailImages);
   useEffect(() => { trailImagesRef.current = trailImages; }, [trailImages]);
 
+  // Preload every trail image into the browser cache up front so spawned
+  // cards paint instantly instead of fetching on first appearance.
+  const preloaded = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    trailImages.forEach((src) => {
+      if (preloaded.current.has(src)) return;
+      preloaded.current.add(src);
+      const img = new window.Image();
+      img.decoding = "async";
+      img.src = src;
+    });
+  }, [trailImages]);
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -75,9 +88,9 @@ export default function AboutPage() {
         height: ${h}px;
         pointer-events: none;
         z-index: 5;
-        transform: rotate(${rot}deg) scale(0.9);
+        transform: rotate(${rot}deg) scale(0.4);
         opacity: 0;
-        transition: opacity 300ms ease, transform 300ms ease;
+        transition: opacity 260ms ease, transform 360ms cubic-bezier(0.34, 1.3, 0.64, 1);
         overflow: hidden;
         box-shadow: 0 2px 12px rgba(0,0,0,0.08);
       `;
@@ -94,7 +107,12 @@ export default function AboutPage() {
       el.appendChild(img);
       container.appendChild(el);
 
-      // Trigger enter animation
+      // Force a reflow so the initial scale(0.4)/opacity:0 is committed before
+      // we flip to the target — otherwise the transition has no start state and
+      // the card snaps straight to full size.
+      void el.offsetWidth;
+
+      // Trigger enter animation (next frame, after the start state is painted)
       requestAnimationFrame(() => {
         el.style.opacity = "1";
         el.style.transform = `rotate(${rot}deg) scale(1)`;
