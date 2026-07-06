@@ -197,15 +197,12 @@ function CollectionView({
   const handleSelect = useCallback((box: Box) => setSelected(box), []);
 
   useEffect(() => {
+    // Arrow navigation is owned by the detail panel (photos, then box rollover).
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showShareModal) { setShowShareModal(false); return; }
-        setSelected(null); return;
+        setSelected(null);
       }
-      if (!selected) return;
-      const i = collectedBoxes.findIndex((b) => b.id === selected.id);
-      if (e.key === "ArrowLeft" && i > 0) setSelected(collectedBoxes[i - 1]);
-      if (e.key === "ArrowRight" && i < collectedBoxes.length - 1) setSelected(collectedBoxes[i + 1]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -282,28 +279,36 @@ function CollectionView({
         )}
       </AnimatePresence>
 
-      {/* Lightbox */}
+      {/* Full-screen detail overlay */}
       <AnimatePresence>
         {selected && (() => {
           const i = collectedBoxes.findIndex((b) => b.id === selected.id);
+          const coverOf = (b: Box) => userPhotos[b.id] ?? b.images?.[0];
           return (
-            <>
-              <motion.div key="backdrop" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setSelected(null)} style={{ position: "fixed", inset: 0, backgroundColor: "#FFFFFF", zIndex: 50, cursor: "default" }} />
-              <motion.div key="panel" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }} className="lightbox-modal" style={{ position: "fixed", zIndex: 51 }}>
-                <DetailPanel
-                  box={selected}
-                  displayNumber={i + 1}
-                  isCollected={collected.has(selected.id)}
-                  onCollect={() => toggleCollect(selected.id)}
-                  onPrev={() => { if (i > 0) setSelected(collectedBoxes[i - 1]); }}
-                  onNext={() => { if (i < collectedBoxes.length - 1) setSelected(collectedBoxes[i + 1]); }}
-                  hasPrev={i > 0}
-                  hasNext={i < collectedBoxes.length - 1}
-                  onClose={() => setSelected(null)}
-                  capturedLabel="COLLECTED"
-                />
-              </motion.div>
-            </>
+            <motion.div
+              key="detail"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+              style={{ position: "fixed", inset: 0, zIndex: 60 }}
+            >
+              <DetailPanel
+                box={selected}
+                displayNumber={i + 1}
+                isCollected={collected.has(selected.id)}
+                onCollect={() => toggleCollect(selected.id)}
+                onPrev={() => { if (i > 0) setSelected(collectedBoxes[i - 1]); }}
+                onNext={() => { if (i < collectedBoxes.length - 1) setSelected(collectedBoxes[i + 1]); }}
+                hasPrev={i > 0}
+                hasNext={i < collectedBoxes.length - 1}
+                prevSrc={i > 0 ? coverOf(collectedBoxes[i - 1]) : undefined}
+                nextSrc={i < collectedBoxes.length - 1 ? coverOf(collectedBoxes[i + 1]) : undefined}
+                userPhoto={userPhotos[selected.id]}
+                onClose={() => setSelected(null)}
+                capturedLabel="COLLECTED"
+              />
+            </motion.div>
           );
         })()}
       </AnimatePresence>

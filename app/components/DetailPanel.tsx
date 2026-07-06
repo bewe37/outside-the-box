@@ -23,6 +23,8 @@ export function DetailPanel({
   onSwapPhoto,
   onClose,
   capturedLabel = "CAPTURED",
+  prevSrc,
+  nextSrc,
 }: {
   box: Box;
   displayNumber: number;
@@ -36,6 +38,8 @@ export function DetailPanel({
   capturedLabel?: string;
   userPhoto?: string;       // user's custom photo URL if set
   onSwapPhoto?: (file: File) => Promise<void>; // present only in own collection
+  prevSrc?: string;         // cover of the previous box (left peek)
+  nextSrc?: string;         // cover of the next box (right peek)
 }) {
   const photos = box.images ?? [];
   const heroSrc = userPhoto ?? photos[0] ?? "";
@@ -46,8 +50,30 @@ export function DetailPanel({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const allPhotos = [heroSrc, ...photos.slice(1)].filter(Boolean);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Which of this box's photos is showing on the left stage carousel.
+  const [photoIndex, setPhotoIndex] = useState(0);
+  // Aspect ratio (w/h) per photo src, so each carousel card keeps its own shape.
+  const [photoAspects, setPhotoAspects] = useState<Record<string, number>>({});
 
   useEffect(() => { setMounted(true); }, []);
+  // Reset the photo carousel whenever the box changes.
+  useEffect(() => { setPhotoIndex(0); }, [box.id]);
+
+  // Load each photo's natural aspect ratio so cards are sized individually.
+  useEffect(() => {
+    allPhotos.forEach((src) => {
+      if (!src || photoAspects[src]) return;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          setPhotoAspects((prev) => prev[src] ? prev : { ...prev, [src]: img.naturalWidth / img.naturalHeight });
+        }
+      };
+      img.src = src;
+    });
+  }, [allPhotos, photoAspects]);
+
+  const currentPhoto = allPhotos[photoIndex] ?? heroSrc;
 
   const closeLightbox = useCallback(() => setLightboxIndex(null), []);
 
@@ -63,18 +89,38 @@ export function DetailPanel({
     return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [lightboxIndex, allPhotos.length, closeLightbox]);
 
+  // Panel navigation (lightbox closed): arrows step through this box's photos,
+  // then roll over to the previous/next box.
+  useEffect(() => {
+    if (lightboxIndex !== null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { onClose?.(); return; }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        if (photoIndex < allPhotos.length - 1) setPhotoIndex((i) => i + 1);
+        else if (hasNext) onNext?.();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        if (photoIndex > 0) setPhotoIndex((i) => i - 1);
+        else if (hasPrev) onPrev?.();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxIndex, photoIndex, allPhotos.length, hasNext, hasPrev, onNext, onPrev, onClose]);
+
   React.useEffect(() => {
     setAspect(null);
     setHeroLoaded(false);
-    if (!heroSrc) return;
+    if (!currentPhoto) return;
     const img = new window.Image();
     img.onload = () => {
       if (img.naturalWidth && img.naturalHeight) {
         setAspect(img.naturalWidth / img.naturalHeight);
       }
     };
-    img.src = heroSrc;
-  }, [heroSrc]);
+    img.src = currentPhoto;
+  }, [currentPhoto]);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -86,86 +132,176 @@ export function DetailPanel({
 
   const vw = typeof window !== "undefined" ? window.innerWidth : 1200;
   const isMobile = vw <= 640;
-  // Panel width is fixed; hero height is derived from aspect so there's no
-  // letterbox whitespace — portrait images get taller, landscape images shorter.
-  const PANEL_W_PX = isMobile ? vw : Math.min(560, vw - 48);
-  const PANEL_W = isMobile ? "100%" : PANEL_W_PX;
-  const isLandscape = aspect !== null && aspect > 1;
-  const heroContainerW = PANEL_W_PX - 32;
-  // Mobile: fixed height for all images so layout doesn't shift between portrait/landscape
-  const HERO_H = isMobile
-    ? Math.round(vw * 0.75)
-    : Math.min(Math.round(heroContainerW / (aspect ?? 1)), 320);
-  const PANEL_H = isMobile ? "100dvh" : 820;
-  const labelW = isMobile ? 100 : 120;
+  const SIDEBAR_W = 340;
 
+  // Full-screen two-pane layout: image carousel (left) + metadata sidebar (right).
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: isMobile ? 0 : 16, width: isMobile ? "100%" : "auto", height: isMobile ? "100dvh" : "auto" }} onClick={(e) => e.stopPropagation()}>
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 60,
+        backgroundColor: "#FFFFFF",
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        fontFamily: '"Geist", system-ui, sans-serif',
+        color: "#202020",
+        fontWeight: 400,
+      }}
+    >
+      {/* ── Left: coverflow image carousel ────────────────────────────────── */}
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
-          width: PANEL_W,
-          height: isMobile ? "100dvh" : "min(820px, calc(100vh - 120px))",
-          boxSizing: "border-box",
-          paddingTop: 16,
-          paddingBottom: 16,
-          paddingLeft: 0,
-          paddingRight: 0,
-          backgroundColor: "#FFFFFF",
-          border: isMobile ? "none" : "1px solid #E8E8E8",
-          display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? 12 : 16,
-          fontFamily: '"Geist", system-ui, sans-serif',
-          color: "#202020",
-          fontWeight: 400,
+          flex: 1,
+          minWidth: 0,
+          position: "relative",
           overflow: "hidden",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: isMobile ? "56px 16px 16px" : 48,
         }}
       >
-        {/* Caption + title + close */}
-        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0, paddingInline: 16 }}>
+        {/* Center card size, derived from aspect. Neighbours are scaled down and
+            pushed aside; the active card grows and centres. */}
+        {(() => {
+          // Every card fits within a fixed stage height and keeps its OWN
+          // aspect ratio, so switching orientations never resizes the layout.
+          const stageH = isMobile ? Math.round(vw * 1.0) : 520;
+          const GAP = 28;              // px gap between adjacent cards
+          const scaleFor = (abs: number) => (abs === 0 ? 1 : abs === 1 ? 0.72 : 0.5);
+          const cardWidth = (src: string) => Math.round(stageH * (photoAspects[src] ?? aspect ?? 0.75));
+
+          // Precompute cumulative x offsets outward from the active card so the
+          // gap between neighbours is even regardless of orientation.
+          const xFor = (targetOffset: number): number => {
+            if (targetOffset === 0) return 0;
+            const dir = Math.sign(targetOffset);
+            let x = cardWidth(allPhotos[photoIndex] ?? "") / 2; // active half-width
+            for (let step = 1; step <= Math.abs(targetOffset); step++) {
+              const idx = photoIndex + dir * step;
+              const w = cardWidth(allPhotos[idx] ?? "") * scaleFor(step);
+              x += GAP + w / 2;
+              if (step < Math.abs(targetOffset)) x += w / 2;
+            }
+            return dir * x;
+          };
+
+          return allPhotos.map((src, i) => {
+            const offset = i - photoIndex;
+            const abs = Math.abs(offset);
+            if (abs > 2) return null;  // active + up to two cards deep each side
+            const isActive = offset === 0;
+            const cardW = cardWidth(src);
+            return (
+              <motion.div
+                key={src}
+                onClick={() => (isActive ? setLightboxIndex(i) : setPhotoIndex(i))}
+                initial={false}
+                animate={{
+                  x: xFor(offset),
+                  scale: scaleFor(abs),
+                  opacity: abs === 0 ? 1 : abs === 1 ? 0.55 : 0.32,
+                  zIndex: 5 - abs,
+                }}
+                transition={{ type: "spring", stiffness: 260, damping: 30, mass: 0.9 }}
+                style={{
+                  position: "absolute",
+                  width: cardW,
+                  height: stageH,
+                  cursor: isActive ? "zoom-in" : "pointer",
+                  boxShadow: isActive ? "0 24px 70px rgba(0,0,0,0.18)" : "0 12px 40px rgba(0,0,0,0.10)",
+                  backgroundColor: "#F0F0F0",
+                  overflow: "hidden",
+                }}
+              >
+                <Image
+                  src={src}
+                  alt={box.title}
+                  fill
+                  sizes="(max-width: 640px) 100vw, 50vw"
+                  style={{ objectFit: "cover", filter: "saturate(1.15)" }}
+                  onLoad={isActive ? () => setTimeout(() => setHeroLoaded(true), 80) : undefined}
+                />
+              </motion.div>
+            );
+          });
+        })()}
+
+        {/* Photo counter */}
+        {allPhotos.length > 1 && (
+          <div style={{ position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)", fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", background: "rgba(255,255,255,0.9)", padding: "3px 10px", pointerEvents: "none", zIndex: 3 }}>
+            {photoIndex + 1} / {allPhotos.length}
+          </div>
+        )}
+      </div>
+
+      {/* ── Right: metadata sidebar ───────────────────────────────────────── */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: isMobile ? "100%" : SIDEBAR_W,
+          flexShrink: 0,
+          borderLeft: isMobile ? "none" : "1px solid #E8E8E8",
+          borderTop: isMobile ? "1px solid #E8E8E8" : "none",
+          display: "flex",
+          flexDirection: "column",
+          overflowY: "auto",
+          position: "relative",
+        }}
+      >
+        {/* Top controls: prev/next (left) + close (right) */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box">
+              <ChevronIcon dir="left" />
+            </PillButton>
+            <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box">
+              <ChevronIcon dir="right" />
+            </PillButton>
+          </div>
+          <PillButton onClick={() => onClose?.()} ariaLabel="Close">
+            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </PillButton>
+        </div>
+
+        {/* Sidebar body — content on top, collect pinned to the bottom */}
+        <div style={{ flex: 1, minHeight: 0, padding: "8px 20px 20px", display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Caption + title */}
           <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", marginBottom: 4 }}>
+            <span style={{ fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020", marginBottom: 6 }}>
               ({String(displayNumber).padStart(3, "0")}) {capturedLabel} {box.captured}
             </span>
             <span style={{ fontSize: size.subtitle, lineHeight: leading.subtitle, letterSpacing: tracking.normal, textTransform: "uppercase" }}>
               {box.title}
             </span>
           </div>
-          <CollectButton isCollected={isCollected} onClick={onCollect} />
-        </div>
 
-        {/* Scrollable body — hero + metadata */}
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: isMobile ? 12 : 16 }}>
+          {/* Description */}
+          {box.description && (
+            <p style={{ margin: 0, fontSize: size.meta, lineHeight: leading.body, letterSpacing: tracking.normal, color: "#202020", textWrap: "pretty" } as React.CSSProperties}>
+              {box.description}
+            </p>
+          )}
 
-        {/* Hero — landscape spans the full card width; portrait aligns its left
-            edge with the metadata value column. The loading shimmer always
-            spans the full card width regardless of orientation. */}
-        <div style={{ flexShrink: 0, position: "relative", paddingInline: 16, height: HERO_H }}>
-          {/* Full-width shimmer */}
-          {!heroLoaded && <div className="img-shimmer" style={{ position: "absolute", left: 16, right: 16, top: 0, height: HERO_H, zIndex: 1 }} />}
-          {/* Image container — portrait is indented to the value column via
-              left offset + reduced width so the filled image shifts right. */}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: isLandscape ? 16 : 16 + labelW + 16,
-              right: 16,
-              height: HERO_H,
-              cursor: "zoom-in",
-            }}
-            onClick={() => setLightboxIndex(0)}
-          >
-            <Image
-              src={heroSrc}
-              alt={box.title}
-              fill
-              style={{ objectFit: isLandscape ? "cover" : "contain", objectPosition: isLandscape ? "center" : "left center", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease", filter: "saturate(1.15)" }}
-              onLoad={() => setTimeout(() => setHeroLoaded(true), 80)}
-            />
+          {/* Metadata rows — right-aligned values */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <SidebarRow label="Artist" value={box.artist} />
+            <SidebarRow label="Year" value={formatYear(box.year)} />
+            <SidebarRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingBlock: 12, borderTop: "1px solid #F4F4F4" }}>
+              <span style={{ fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>Location</span>
+              <MapAddress address={box.address} lat={box.lat} lng={box.lng} />
+            </div>
           </div>
+
+          {/* Swap photo (own collection only) */}
           {onSwapPhoto && (
-            <div style={{ display: "flex", justifyContent: "flex-end", paddingInline: 16, paddingTop: 6 }}>
+            <div style={{ display: "flex", justifyContent: "flex-start" }}>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -179,7 +315,7 @@ export function DetailPanel({
                 style={{
                   fontSize: size.caption, letterSpacing: tracking.loose,
                   textTransform: "uppercase", fontFamily: "inherit",
-                  color: uploading ? "#CACACA" : "#AAAAAA",
+                  color: uploading ? "#CACACA" : "#202020",
                   background: "none", border: "none",
                   cursor: uploading ? "default" : "pointer", padding: 0,
                 }}
@@ -188,56 +324,12 @@ export function DetailPanel({
               </button>
             </div>
           )}
-        </div>
 
-        {/* Metadata */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingInline: 16, paddingBottom: 16 }}>
-          <MetaRow label="Artist" value={box.artist} labelW={labelW} />
-          <MetaRow label="Year" value={formatYear(box.year)} labelW={labelW} />
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <span style={{ width: labelW, flexShrink: 0, fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase" }}>Location</span>
-            <MapAddress address={box.address} lat={box.lat} lng={box.lng} />
+          {/* Collect — pinned to the bottom of the sidebar */}
+          <div style={{ marginTop: "auto", paddingTop: 20, display: "flex" }}>
+            <CollectButton isCollected={isCollected} onClick={onCollect} full />
           </div>
-          <MetaRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} labelW={labelW} />
-          {box.description && <MetaRow label="Artwork Description" value={box.description} multiline labelW={labelW} />}
-
-          {photos.length > 1 && (
-            <div style={{ display: "flex", alignItems: "start", gap: 16, borderTop: "1px solid #F4F4F4", paddingTop: 14 }}>
-              <span style={{ width: labelW, flexShrink: 0, fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase" }}>
-                More Photos
-              </span>
-              <div className="thumb-strip" style={{ flex: 1, display: "flex", gap: 4, overflowX: "auto", scrollSnapType: "x mandatory" }}>
-                {photos.slice(1).map((src, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setLightboxIndex(i + 1)}
-                    style={{ flex: "0 0 88px", width: 88, height: 88, position: "relative", scrollSnapAlign: "start", cursor: "zoom-in" }}
-                  >
-                    <Image src={src} alt="" fill style={{ objectFit: "cover", filter: "saturate(1.15)" }} loading="lazy" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
-        </div>{/* end scrollable body */}
-
-        {/* Prev / close / next — inside panel on mobile */}
-        {isMobile && (
-          <div style={{ display: "flex", gap: 8, paddingInline: 16, paddingBottom: 8, flexShrink: 0, justifyContent: "center" }}>
-            <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box">
-              <ChevronIcon dir="left" />
-            </PillButton>
-            <PillButton onClick={() => onClose?.()} ariaLabel="Close">
-              <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
-                <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </PillButton>
-            <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box">
-              <ChevronIcon dir="right" />
-            </PillButton>
-          </div>
-        )}
       </div>
 
       {/* Photo lightbox */}
@@ -320,111 +412,32 @@ export function DetailPanel({
         document.body
       )}
 
-      {/* Prev / close / next — desktop only (on mobile they're inside the panel) */}
-      {!isMobile && (
-        <div style={{ display: "flex", gap: 8 }}>
-          <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box">
-            <ChevronIcon dir="left" />
-          </PillButton>
-          <PillButton onClick={() => onClose?.()} ariaLabel="Close">
-            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
-              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-          </PillButton>
-          <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box">
-            <ChevronIcon dir="right" />
-          </PillButton>
-        </div>
-      )}
     </div>
   );
 }
 
-function MapAddress({ address, lat: initLat, lng: initLng }: { address: string; lat?: number; lng?: number }) {
-  const [hovered, setHovered] = useState(false);
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    initLat && initLng ? { lat: initLat, lng: initLng } : null
-  );
-  const anchorRef = useRef<HTMLAnchorElement>(null);
-  const geocoded = useRef(false);
-  const leaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => { setMounted(true); }, []);
-  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ", Toronto, Ontario")}`;
-
-  const W = 240, H = 160;
-  const mapSrc = coords ? `/api/map?lat=${coords.lat}&lng=${coords.lng}` : null;
-
-  async function handleMouseEnter() {
-    if (leaveTimer.current) { clearTimeout(leaveTimer.current); leaveTimer.current = null; }
-    if (!anchorRef.current) return;
-    setRect(anchorRef.current.getBoundingClientRect());
-    setHovered(true);
-
-    if (!coords && !geocoded.current) {
-      geocoded.current = true;
-      try {
-        const q = encodeURIComponent(address + ", Toronto, Ontario, Canada");
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`, {
-          headers: { "Accept-Language": "en" },
-        });
-        const data = await res.json();
-        if (data[0]) setCoords({ lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) });
-      } catch {}
-    }
-  }
-
-  function handleMouseLeave() {
-    leaveTimer.current = setTimeout(() => setHovered(false), 120);
-  }
-
-  const tooltip = mounted && hovered && rect ? createPortal(
-    <div
-      style={{
-        position: "fixed",
-        left: rect.left,
-        top: rect.top - H - 10,
-        width: W,
-        height: H,
-        border: "1px solid #E8E8E8",
-        overflow: "hidden",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-        zIndex: 9999,
-        background: "#F0F0F0",
-        pointerEvents: "none",
-      }}
-    >
-      {mapSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={mapSrc} alt="" width={W} height={H} style={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }} />
-      ) : (
-        <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>
-            Loading…
-          </span>
-        </div>
-      )}
-    </div>,
-    document.body
-  ) : null;
-
+function SidebarRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ flex: 1 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingBlock: 12, borderTop: "1px solid #F4F4F4" }}>
+      <span style={{ flexShrink: 0, fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>{label}</span>
+      <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "#202020", textAlign: "right" }}>{value}</span>
+    </div>
+  );
+}
+
+function MapAddress({ address }: { address: string; lat?: number; lng?: number }) {
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ", Toronto, Ontario")}`;
+  return (
+    <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
       <a
-        ref={anchorRef}
         href={mapsUrl}
         target="_blank"
         rel="noopener noreferrer"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
         style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "#202020", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}
       >
         {formatAddress(address)}
         <span style={{ fontSize: 10, display: "inline-block", transform: "rotate(45deg) scaleX(-1)", lineHeight: 1 }}>↑</span>
       </a>
-      {tooltip}
     </div>
   );
 }
@@ -463,7 +476,7 @@ function PillButton({ children, onClick, filled = false, disabled = false, ariaL
   );
 }
 
-function CollectButton({ isCollected, onClick }: { isCollected: boolean; onClick: () => void }) {
+function CollectButton({ isCollected, onClick, full = false }: { isCollected: boolean; onClick: () => void; full?: boolean }) {
   const [hovered, setHovered] = useState(false);
 
   return (
@@ -479,8 +492,9 @@ function CollectButton({ isCollected, onClick }: { isCollected: boolean; onClick
       }}
       transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
       style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "6px 12px",
+        display: "flex", alignItems: "center", justifyContent: full ? "center" : "flex-start", gap: 8,
+        padding: full ? "11px 12px" : "6px 12px",
+        width: full ? "100%" : undefined,
         border: "1px solid #202020",
         cursor: "pointer", outline: "none",
         fontFamily: '"Geist", system-ui, sans-serif',

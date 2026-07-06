@@ -91,12 +91,9 @@ export default function GalleryPage() {
   }, [user]);
 
   useEffect(() => {
+    // Arrow navigation is owned by the detail panel (photos, then box rollover).
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setGridSelected(null); return; }
-      if (!gridSelected) return;
-      const i = filtered.findIndex((b) => b.id === gridSelected.id);
-      if (e.key === "ArrowLeft" && i > 0) setGridSelected(filtered[i - 1]);
-      if (e.key === "ArrowRight" && i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]);
+      if (e.key === "Escape") setGridSelected(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -213,55 +210,35 @@ export default function GalleryPage() {
         </AnimatePresence>
       </div>
 
-      {/* Lightbox — centered modal over a blurred wash of the grid */}
+      {/* Full-screen detail overlay */}
       <AnimatePresence>
         {gridSelected && (
-          <>
-            {/* Backdrop: solid white wash — fixed so it covers the nav too. */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setGridSelected(null)}
-              style={{
-                position: "fixed",
-                inset: 0,
-                backgroundColor: "#FFFFFF",
-                zIndex: 50,
-                cursor: "default",
-              }}
-            />
-            {/* Centered modal — full screen on mobile */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.97 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
-              className="lightbox-modal"
-              style={{
-                position: "fixed",
-                zIndex: 51,
-              }}
-            >
-              {(() => {
-                const i = filtered.findIndex((b) => b.id === gridSelected.id);
-                return (
-                  <DetailPanel
-                    box={gridSelected}
-                    displayNumber={i + 1}
-                    isCollected={collected.has(gridSelected.id)}
-                    onCollect={() => toggleCollect(gridSelected.id)}
-                    onPrev={() => { if (i > 0) setGridSelected(filtered[i - 1]); }}
-                    onNext={() => { if (i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]); }}
-                    hasPrev={i > 0}
-                    hasNext={i >= 0 && i < filtered.length - 1}
-                    onClose={() => setGridSelected(null)}
-                  />
-                );
-              })()}
-            </motion.div>
-          </>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+            style={{ position: "fixed", inset: 0, zIndex: 60 }}
+          >
+            {(() => {
+              const i = filtered.findIndex((b) => b.id === gridSelected.id);
+              return (
+                <DetailPanel
+                  box={gridSelected}
+                  displayNumber={i + 1}
+                  isCollected={collected.has(gridSelected.id)}
+                  onCollect={() => toggleCollect(gridSelected.id)}
+                  onPrev={() => { if (i > 0) setGridSelected(filtered[i - 1]); }}
+                  onNext={() => { if (i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]); }}
+                  hasPrev={i > 0}
+                  hasNext={i >= 0 && i < filtered.length - 1}
+                  prevSrc={i > 0 ? imgUrl(filtered[i - 1]) : undefined}
+                  nextSrc={i >= 0 && i < filtered.length - 1 ? imgUrl(filtered[i + 1]) : undefined}
+                  onClose={() => setGridSelected(null)}
+                />
+              );
+            })()}
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
