@@ -249,7 +249,7 @@ export default function MasonryView({
         ))}
       </div>
       <div style={{ paddingTop: 40, paddingBottom: 24, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>
-        Last updated June 1, 2026 · {boxes.length} boxes
+        Last updated July 6, 2026 · {boxes.length} boxes
       </div>
     </div>
   );
