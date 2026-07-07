@@ -134,6 +134,154 @@ export function DetailPanel({
   const isMobile = vw <= 640;
   const SIDEBAR_W = 340;
 
+  // Shared photo lightbox (used by both mobile and desktop layouts).
+  const lightbox = mounted ? createPortal(
+    <AnimatePresence>
+      {lightboxIndex !== null && (
+        <motion.div
+          key="photo-lightbox"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onClick={closeLightbox}
+          style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(255,255,255,0.95)", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <motion.div
+            key={lightboxIndex}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh", width: "auto", height: "auto" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={lightboxIndex !== null ? allPhotos[lightboxIndex] : ""} alt="" style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }} />
+          </motion.div>
+          <button onClick={closeLightbox} className="close-btn" style={{ position: "fixed", top: 20, right: 20, background: "none", border: "none", cursor: "pointer", padding: 8, lineHeight: 1 }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+          </button>
+          {lightboxIndex !== null && lightboxIndex > 0 && (
+            <button onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }} className="lightbox-arrow" style={{ position: "fixed", left: 20, top: "50%", translate: "0 -50%", background: "none", border: "none", cursor: "pointer", padding: 12 }}>
+              <ChevronIcon dir="left" color="#202020" />
+            </button>
+          )}
+          {lightboxIndex !== null && lightboxIndex < allPhotos.length - 1 && (
+            <button onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }} className="lightbox-arrow" style={{ position: "fixed", right: 20, top: "50%", translate: "0 -50%", background: "none", border: "none", cursor: "pointer", padding: 12 }}>
+              <ChevronIcon dir="right" color="#202020" />
+            </button>
+          )}
+          {allPhotos.length > 1 && lightboxIndex !== null && (
+            <div style={{ position: "fixed", bottom: 24, left: "50%", translate: "-50% 0", fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", fontFamily: '"Geist", system-ui, sans-serif' }}>
+              {lightboxIndex + 1} / {allPhotos.length}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body
+  ) : null;
+
+  // ── Mobile: the old single-column panel (image on top, scrollable meta) ────
+  if (isMobile) {
+    const isLandscape = aspect !== null && aspect > 1;
+    const HERO_H = Math.round(vw * 0.75);
+    const labelW = 100;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", width: "100%", height: "100dvh" }} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{
+            width: "100%", height: "100dvh", boxSizing: "border-box",
+            paddingTop: 16, paddingBottom: 16,
+            backgroundColor: "#FFFFFF", border: "none",
+            display: "flex", flexDirection: "column", gap: 12,
+            fontFamily: '"Geist", system-ui, sans-serif', color: "#202020", fontWeight: 400,
+            overflow: "hidden",
+          }}
+        >
+          {/* Caption + title + collect */}
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexShrink: 0, paddingInline: 16 }}>
+            <div style={{ display: "flex", flexDirection: "column" }}>
+              <span style={{ fontSize: size.caption, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", marginBottom: 4 }}>
+                ({String(displayNumber).padStart(3, "0")}) {capturedLabel} {box.captured}
+              </span>
+              <span style={{ fontSize: size.subtitle, lineHeight: leading.subtitle, letterSpacing: tracking.normal, textTransform: "uppercase" }}>
+                {box.title}
+              </span>
+            </div>
+            <CollectButton isCollected={isCollected} onClick={onCollect} />
+          </div>
+
+          {/* Scrollable body — hero + metadata */}
+          <div style={{ flex: 1, overflowY: "auto", minHeight: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* Hero */}
+            <div style={{ flexShrink: 0, position: "relative", paddingInline: 16, height: HERO_H }}>
+              {!heroLoaded && <div className="img-shimmer" style={{ position: "absolute", left: 16, right: 16, top: 0, height: HERO_H, zIndex: 1 }} />}
+              <div style={{ position: "absolute", top: 0, left: 16, right: 16, height: HERO_H, cursor: "zoom-in" }} onClick={() => setLightboxIndex(photoIndex)}>
+                <Image
+                  key={currentPhoto}
+                  src={currentPhoto}
+                  alt={box.title}
+                  fill
+                  style={{ objectFit: isLandscape ? "cover" : "contain", opacity: heroLoaded ? 1 : 0, transition: "opacity 0.3s ease", filter: "saturate(1.15)" }}
+                  onLoad={() => setTimeout(() => setHeroLoaded(true), 80)}
+                />
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingInline: 16, paddingBottom: 16 }}>
+              <MetaRow label="Artist" value={box.artist} labelW={labelW} />
+              <MetaRow label="Year" value={formatYear(box.year)} labelW={labelW} />
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <span style={{ width: labelW, flexShrink: 0, fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase" }}>Location</span>
+                <MapAddress address={box.address} align="start" />
+              </div>
+              <MetaRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} labelW={labelW} />
+              {box.description && <MetaRow label="Artwork Description" value={box.description} multiline labelW={labelW} />}
+
+              {onSwapPhoto && (
+                <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                  <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp,image/avif" style={{ display: "none" }} onChange={handleFileChange} />
+                  <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", fontFamily: "inherit", color: uploading ? "#CACACA" : "#202020", background: "none", border: "none", cursor: uploading ? "default" : "pointer", padding: 0 }}>
+                    {uploading ? "Uploading…" : userPhoto ? "Swap photo" : "Use my photo"}
+                  </button>
+                </div>
+              )}
+
+              {/* Photo thumbnails */}
+              {allPhotos.length > 1 && (
+                <div style={{ display: "flex", alignItems: "start", gap: 16, borderTop: "1px solid #F4F4F4", paddingTop: 14 }}>
+                  <span style={{ width: labelW, flexShrink: 0, fontSize: size.caption, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase" }}>Photos</span>
+                  <div className="thumb-strip" style={{ flex: 1, display: "flex", gap: 4, overflowX: "auto", scrollSnapType: "x mandatory" }}>
+                    {allPhotos.map((src, i) => (
+                      <div key={i} onClick={() => setPhotoIndex(i)} style={{ flex: "0 0 72px", width: 72, height: 72, position: "relative", scrollSnapAlign: "start", cursor: "pointer", outline: i === photoIndex ? "2px solid #202020" : "none", outlineOffset: -2 }}>
+                        <Image src={src} alt="" fill style={{ objectFit: "cover", filter: "saturate(1.15)" }} loading="lazy" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Prev / close / next */}
+          <div style={{ display: "flex", gap: 8, paddingInline: 16, paddingBottom: 8, flexShrink: 0, justifyContent: "center" }}>
+            <PillButton onClick={() => onPrev?.()} disabled={!hasPrev} ariaLabel="Previous box"><ChevronIcon dir="left" /></PillButton>
+            <PillButton onClick={() => onClose?.()} ariaLabel="Close">
+              <svg width={10} height={10} viewBox="0 0 10 10" fill="none"><path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>
+            </PillButton>
+            <PillButton onClick={() => onNext?.()} disabled={!hasNext} ariaLabel="Next box"><ChevronIcon dir="right" /></PillButton>
+          </div>
+        </div>
+
+        {/* Photo lightbox (shared) */}
+        {mounted && lightbox}
+      </div>
+    );
+  }
+
   // Full-screen two-pane layout: image carousel (left) + metadata sidebar (right).
   return (
     <div
@@ -169,10 +317,12 @@ export function DetailPanel({
         {(() => {
           // Every card fits within a fixed stage height and keeps its OWN
           // aspect ratio, so switching orientations never resizes the layout.
-          const stageH = isMobile ? Math.round(vw * 1.0) : 520;
-          const GAP = 28;              // px gap between adjacent cards
+          const stageH = isMobile ? Math.round(vw * 0.72) : 520;
+          const GAP = isMobile ? 16 : 28;   // px gap between adjacent cards
           const scaleFor = (abs: number) => (abs === 0 ? 1 : abs === 1 ? 0.72 : 0.5);
-          const cardWidth = (src: string) => Math.round(stageH * (photoAspects[src] ?? aspect ?? 0.75));
+          // Cap the width too, so wide/landscape photos don't overflow on mobile.
+          const maxW = isMobile ? Math.round(vw * 0.78) : Infinity;
+          const cardWidth = (src: string) => Math.min(maxW, Math.round(stageH * (photoAspects[src] ?? aspect ?? 0.75)));
 
           // Precompute cumulative x offsets outward from the active card so the
           // gap between neighbours is even regardless of orientation.
@@ -230,10 +380,13 @@ export function DetailPanel({
           });
         })()}
 
-        {/* Photo counter */}
+        {/* Photo counter — tabular figures + centred digit slots so the width
+            never shifts between "1 / 3" and "3 / 3" (or double digits). */}
         {allPhotos.length > 1 && (
-          <div style={{ position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)", fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", background: "rgba(255,255,255,0.9)", padding: "3px 10px", pointerEvents: "none", zIndex: 3 }}>
-            {photoIndex + 1} / {allPhotos.length}
+          <div style={{ position: "absolute", bottom: 24, left: "50%", transform: "translateX(-50%)", fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", background: "rgba(255,255,255,0.9)", padding: "3px 10px", pointerEvents: "none", zIndex: 3, display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums" } as React.CSSProperties}>
+            <span style={{ minWidth: "1.1ch", textAlign: "right" }}>{photoIndex + 1}</span>
+            <span>/</span>
+            <span style={{ minWidth: "1.1ch", textAlign: "left" }}>{allPhotos.length}</span>
           </div>
         )}
       </div>
@@ -332,85 +485,8 @@ export function DetailPanel({
         </div>
       </div>
 
-      {/* Photo lightbox */}
-      {mounted && createPortal(
-        <AnimatePresence>
-          {lightboxIndex !== null && (
-            <motion.div
-              key="photo-lightbox"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-              onClick={closeLightbox}
-              style={{
-                position: "fixed", inset: 0, zIndex: 200,
-                background: "rgba(255,255,255,0.95)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              {/* Image */}
-              <motion.div
-                key={lightboxIndex}
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
-                onClick={(e) => e.stopPropagation()}
-                style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vh", width: "auto", height: "auto" }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={allPhotos[lightboxIndex]}
-                  alt=""
-                  style={{ display: "block", maxWidth: "90vw", maxHeight: "90vh", objectFit: "contain" }}
-                />
-              </motion.div>
-
-              {/* Close */}
-              <button
-                onClick={closeLightbox}
-                className="close-btn"
-                style={{ position: "fixed", top: 20, right: 20, background: "none", border: "none", cursor: "pointer", padding: 8, lineHeight: 1 }}
-              >
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-
-              {/* Prev */}
-              {lightboxIndex > 0 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex - 1); }}
-                  className="lightbox-arrow"
-                  style={{ position: "fixed", left: 20, top: "50%", translate: "0 -50%", background: "none", border: "none", cursor: "pointer", padding: 12 }}
-                >
-                  <ChevronIcon dir="left" color="#202020" />
-                </button>
-              )}
-
-              {/* Next */}
-              {lightboxIndex < allPhotos.length - 1 && (
-                <button
-                  onClick={(e) => { e.stopPropagation(); setLightboxIndex(lightboxIndex + 1); }}
-                  className="lightbox-arrow"
-                  style={{ position: "fixed", right: 20, top: "50%", translate: "0 -50%", background: "none", border: "none", cursor: "pointer", padding: 12 }}
-                >
-                  <ChevronIcon dir="right" color="#202020" />
-                </button>
-              )}
-
-              {/* Counter */}
-              {allPhotos.length > 1 && (
-                <div style={{ position: "fixed", bottom: 24, left: "50%", translate: "-50% 0", fontSize: size.caption, letterSpacing: tracking.loose, color: "#202020", fontFamily: '"Geist", system-ui, sans-serif' }}>
-                  {lightboxIndex + 1} / {allPhotos.length}
-                </div>
-              )}
-            </motion.div>
-          )}
-        </AnimatePresence>,
-        document.body
-      )}
+      {/* Photo lightbox (shared) */}
+      {mounted && lightbox}
 
     </div>
   );
@@ -425,10 +501,10 @@ function SidebarRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function MapAddress({ address }: { address: string; lat?: number; lng?: number }) {
+function MapAddress({ address, align = "end" }: { address: string; align?: "start" | "end"; lat?: number; lng?: number }) {
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address + ", Toronto, Ontario")}`;
   return (
-    <div style={{ flex: 1, display: "flex", justifyContent: "flex-end" }}>
+    <div style={{ flex: 1, display: "flex", justifyContent: align === "start" ? "flex-start" : "flex-end" }}>
       <a
         href={mapsUrl}
         target="_blank"

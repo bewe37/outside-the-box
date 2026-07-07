@@ -17,7 +17,6 @@ const EDGE_SCALE = 0.82;
 const EDGE_DIM = 0.55;
 // Higher = slower, smoother settle. Tuned to feel like the index image stack.
 const DAMPING = 0.94;
-const SENSITIVITY = 0.004;
 const SATURATION = 1.15;
 
 function clampAspect(a: number) {
@@ -69,7 +68,7 @@ function makeMaterial(tex?: THREE.Texture) {
   });
 }
 
-function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSelect: (box: Box) => void; userPhotos: Record<number, string>; isMobile: boolean }) {
+function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Box[]; onSelect: (box: Box) => void; userPhotos: Record<number, string>; isMobile: boolean; stepRef: React.MutableRefObject<(dir: number) => void> }) {
   const { scene, camera } = useThree();
   const focusRef = useRef(0);
   const targetFocus = useRef(0);
@@ -164,34 +163,53 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
     };
   }, [scene, boxes]);
 
+  // Expose a one-item step to the on-screen arrow buttons.
+  useEffect(() => {
+    stepRef.current = (dir: number) => {
+      if (meshesRef.current.length === 0) return;
+      targetFocus.current = Math.round(focusRef.current) + dir;
+    };
+  }, [stepRef]);
+
   useEffect(() => {
     const el = document.querySelector("canvas");
     if (!el) return;
 
-    // After input stops, snap to the nearest whole card. No clamping — the
-    // carousel loops, and the frame loop wraps the offset for display.
-    const scheduleSnap = () => {
-      if (snapTimer.current) clearTimeout(snapTimer.current);
-      snapTimer.current = setTimeout(() => {
-        targetFocus.current = Math.round(targetFocus.current);
-      }, 90);
+    // Discrete stepping: each scroll/swipe gesture moves exactly one item.
+    // Accumulate delta until it crosses a threshold, then jump ±1 and reset.
+    const STEP_THRESHOLD = 40;
+    let wheelAccum = 0;
+    let wheelCooldown = false;
+
+    const stepTo = (dir: number) => {
+      targetFocus.current = Math.round(targetFocus.current) + dir;
     };
 
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-      targetFocus.current += delta * SENSITIVITY;
-      scheduleSnap();
+      wheelAccum += delta;
+      if (!wheelCooldown && Math.abs(wheelAccum) >= STEP_THRESHOLD) {
+        stepTo(Math.sign(wheelAccum));
+        wheelAccum = 0;
+        wheelCooldown = true;
+        // Brief cooldown so one flick = one item, not a burst.
+        setTimeout(() => { wheelCooldown = false; }, 260);
+      }
     };
 
     let lx = 0;
-    const onTouchStart = (e: TouchEvent) => { lx = e.touches[0].clientX; };
+    let touchAccum = 0;
+    const onTouchStart = (e: TouchEvent) => { lx = e.touches[0].clientX; touchAccum = 0; };
     const onTouchMove = (e: TouchEvent) => {
       const dx = lx - e.touches[0].clientX;
       lx = e.touches[0].clientX;
-      targetFocus.current += dx * SENSITIVITY * 2;
+      touchAccum += dx;
     };
-    const onTouchEnd = () => scheduleSnap();
+    const onTouchEnd = () => {
+      if (Math.abs(touchAccum) >= STEP_THRESHOLD) stepTo(Math.sign(touchAccum));
+      touchAccum = 0;
+    };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -318,17 +336,60 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile }: { boxes: Box[]; onSe
 
 export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }: { boxes: Box[]; onSelect: (box: Box) => void; userPhotos?: Record<number, string> }) {
   const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
+  // Bridge so the on-screen arrow buttons can step the carousel inside the canvas.
+  const stepRef = useRef<(dir: number) => void>(() => {});
+
   return (
-    <Canvas
-      camera={{ position: [0, 0, isMobile ? 6.5 : 4], fov: 46 }}
-      gl={{ antialias: true, alpha: false }}
-      style={{ width: "100%", height: "100%", background: "#FFFFFF" }}
-      dpr={[1, 2]}
-    >
-      <color attach="background" args={["#FFFFFF"]} />
-      <Suspense fallback={null}>
-        <Gallery boxes={boxes} onSelect={onSelect} userPhotos={userPhotos} isMobile={isMobile} />
-      </Suspense>
-    </Canvas>
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+      <Canvas
+        camera={{ position: [0, 0, isMobile ? 6.5 : 4], fov: 46 }}
+        gl={{ antialias: true, alpha: false }}
+        style={{ width: "100%", height: "100%", background: "#FFFFFF" }}
+        dpr={[1, 2]}
+      >
+        <color attach="background" args={["#FFFFFF"]} />
+        <Suspense fallback={null}>
+          <Gallery boxes={boxes} onSelect={onSelect} userPhotos={userPhotos} isMobile={isMobile} stepRef={stepRef} />
+        </Suspense>
+      </Canvas>
+
+      {/* Prev / next arrow buttons */}
+      <button
+        onClick={() => stepRef.current(-1)}
+        aria-label="Previous"
+        style={arrowStyle(isMobile, "left")}
+        className="carousel-arrow"
+      >
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+      <button
+        onClick={() => stepRef.current(1)}
+        aria-label="Next"
+        style={arrowStyle(isMobile, "right")}
+        className="carousel-arrow"
+      >
+        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+    </div>
   );
+}
+
+function arrowStyle(isMobile: boolean, side: "left" | "right"): React.CSSProperties {
+  return {
+    position: "absolute",
+    top: "50%",
+    [side]: isMobile ? 16 : 32,
+    transform: "translateY(-50%)",
+    width: 44,
+    height: 44,
+    borderRadius: "50%",
+    background: "rgba(255,255,255,0.9)",
+    border: "1px solid #E8E8E8",
+    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    zIndex: 10,
+  };
 }

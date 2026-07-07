@@ -118,6 +118,15 @@ input[type="range"].col-slider::-moz-range-thumb {
   100% { background-position: -200% 0; }
 }
 
+/* Collection carousel arrow buttons */
+.carousel-arrow {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.carousel-arrow:hover {
+  background-color: #FFFFFF !important;
+  border-color: #CACACA !important;
+}
+
 /* Index row — hover highlight handled by a shared sliding motion bar */
 .index-row {
   position: relative;
@@ -187,6 +196,7 @@ input[type="range"].col-slider::-moz-range-thumb {
   .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
   .masonry-card { margin-bottom: 12px !important; }
   .photos-scroll { padding: 12px !important; }
+  .index-scroll { padding-top: 12px !important; padding-inline: 16px !important; }
 
   /* About page — stack sections normally, no indent */
   .about-sections {

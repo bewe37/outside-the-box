@@ -405,6 +405,7 @@ function IndexView({
     <div
       ref={containerRef}
       onMouseLeave={() => { setHovered(null); }}
+      className="index-scroll"
       style={{
         flex: 1,
         position: "relative",
