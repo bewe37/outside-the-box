@@ -142,6 +142,14 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
         // Recompute the tight cumulative layout now this card's width is known.
         rebuildPositions();
 
+        // Texture tuning: mipmaps + trilinear filtering keeps downscaled cards
+        // crisp and cheap; cap anisotropy so mobile GPUs aren't hammered.
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
+        tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = 2;
+        tex.needsUpdate = true;
+
         const shader = mesh.material as THREE.ShaderMaterial;
         shader.uniforms.uMap.value = tex;
         shader.uniforms.uSaturation.value = SATURATION;
@@ -319,28 +327,42 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     const b = pos[(fi + 1) % n] + (fi + 1 >= n ? total : 0); // unwrap across seam
     const focusX = a + (b - a) * frac;
 
-    meshesRef.current.forEach((mesh, i) => {
+    // Only the cards near focus are visible; skip the rest entirely so we don't
+    // burn per-frame work (and matrix uploads) on off-screen meshes.
+    const VISIBLE_RANGE = 5;
+
+    const meshes = meshesRef.current;
+    for (let i = 0; i < n; i++) {
+      const mesh = meshes[i];
+
+      // Index-space offset for the arc transform, wrapped to the nearest copy.
+      let offset = i - f;
+      offset = ((offset % n) + n) % n;
+      if (offset > n / 2) offset -= n;
+
+      // Cull cards outside the visible window — hide and skip all updates.
+      if (Math.abs(offset) > VISIBLE_RANGE) {
+        if (mesh.visible) mesh.visible = false;
+        continue;
+      }
+      if (!mesh.visible) mesh.visible = true;
+
       // x: distance from focus, wrapped into [-total/2, total/2] so cards recycle.
       let x = pos[i] - focusX;
       x = ((x % total) + total) % total;
       if (x > total / 2) x -= total;
       mesh.position.x = x;
 
-      // Index-space offset for the arc transform (z/tilt/scale/dim).
-      let offset = i - f;
-      offset = ((offset % n) + n) % n;
-      if (offset > n / 2) offset -= n;
-
       const { z, ry, scale, dim } = cardTransform(offset);
       mesh.position.z = z;
       mesh.rotation.y = ry;
       mesh.scale.setScalar(scale);
       // Only show once texture is loaded — fade in smoothly
-      const shader = mesh.material as THREE.ShaderMaterial;
       if (mesh.userData.ready) {
+        const shader = mesh.material as THREE.ShaderMaterial;
         shader.uniforms.uDim.value += (dim - shader.uniforms.uDim.value) * 0.08;
       }
-    });
+    }
   });
 
   return null;
@@ -355,9 +377,10 @@ export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }
     <div style={{ position: "relative", width: "100%", height: "100%", touchAction: "pan-x", overscrollBehavior: "contain" }}>
       <Canvas
         camera={{ position: [0, 0, isMobile ? 6.5 : 4], fov: 46 }}
-        gl={{ antialias: true, alpha: false }}
+        gl={{ antialias: !isMobile, alpha: false, powerPreference: "high-performance" }}
+        // Cap the render resolution — full retina (2x+) is the biggest GPU cost.
+        dpr={isMobile ? 1 : [1, 1.5]}
         style={{ width: "100%", height: "100%", background: "#FFFFFF", touchAction: "pan-x" }}
-        dpr={[1, 2]}
       >
         <color attach="background" args={["#FFFFFF"]} />
         <Suspense fallback={null}>
