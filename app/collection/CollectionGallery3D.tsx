@@ -16,7 +16,7 @@ const FOCUS_SCALE = 1.0;
 const EDGE_SCALE = 0.82;
 const EDGE_DIM = 0.55;
 // Higher = slower, smoother settle. Tuned to feel like the index image stack.
-const DAMPING = 0.94;
+const DAMPING = 0.82;
 const SATURATION = 1.15;
 
 function clampAspect(a: number) {
@@ -176,7 +176,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     if (!el) return;
 
     // Discrete stepping: each scroll/swipe gesture moves exactly one item.
-    const STEP_THRESHOLD = 60;
+    const STEP_THRESHOLD = 45;
     let wheelAccum = 0;
     let wheelLocked = false;         // true once we've stepped for this gesture
     let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -193,7 +193,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
       // second step. The gesture only resets once the wheel goes idle (~120ms
       // with no events), so one continuous scroll = exactly one item.
       if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
-      wheelIdleTimer = setTimeout(() => { wheelLocked = false; wheelAccum = 0; }, 120);
+      wheelIdleTimer = setTimeout(() => { wheelLocked = false; wheelAccum = 0; }, 70);
       if (wheelLocked) return;
 
       wheelAccum += delta;
@@ -360,14 +360,15 @@ export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }
         </Suspense>
       </Canvas>
 
-      {/* Prev / next — mobile only, thin chevrons centred at the bottom */}
+      {/* Prev / next — mobile only. Sit just below the centred image (which is
+          ~vw tall, centred), clear of the Share / Sign out buttons. */}
       {isMobile && (
-        <div style={{ position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 40, zIndex: 10 }}>
+        <div style={{ position: "absolute", top: "calc(50% + 46vw)", left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 48, zIndex: 10 }}>
           <button onClick={() => stepRef.current(-1)} aria-label="Previous" className="carousel-arrow" style={chevronBtn}>
-            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <button onClick={() => stepRef.current(1)} aria-label="Next" className="carousel-arrow" style={chevronBtn}>
-            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
       )}

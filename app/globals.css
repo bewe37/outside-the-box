@@ -195,8 +195,8 @@ input[type="range"].col-slider::-moz-range-thumb {
   /* Grid view — force 2 columns on mobile, tighter gaps */
   .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
   .masonry-card { margin-bottom: 12px !important; }
-  .photos-scroll { padding: 12px !important; }
-  .index-scroll { padding-top: 12px !important; padding-inline: 16px !important; }
+  .photos-scroll { padding: 12px !important; padding-top: 8px !important; }
+  .index-scroll { padding-top: 8px !important; padding-inline: 16px !important; }
 
   /* About page — stack sections normally, no indent */
   .about-sections {
