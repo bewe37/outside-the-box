@@ -176,10 +176,10 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     if (!el) return;
 
     // Discrete stepping: each scroll/swipe gesture moves exactly one item.
-    // Accumulate delta until it crosses a threshold, then jump ±1 and reset.
-    const STEP_THRESHOLD = 40;
+    const STEP_THRESHOLD = 60;
     let wheelAccum = 0;
-    let wheelCooldown = false;
+    let wheelLocked = false;         // true once we've stepped for this gesture
+    let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const stepTo = (dir: number) => {
       targetFocus.current = Math.round(targetFocus.current) + dir;
@@ -188,13 +188,19 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+
+      // While locked, swallow the momentum tail — don't accumulate toward a
+      // second step. The gesture only resets once the wheel goes idle (~120ms
+      // with no events), so one continuous scroll = exactly one item.
+      if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
+      wheelIdleTimer = setTimeout(() => { wheelLocked = false; wheelAccum = 0; }, 120);
+      if (wheelLocked) return;
+
       wheelAccum += delta;
-      if (!wheelCooldown && Math.abs(wheelAccum) >= STEP_THRESHOLD) {
+      if (Math.abs(wheelAccum) >= STEP_THRESHOLD) {
         stepTo(Math.sign(wheelAccum));
         wheelAccum = 0;
-        wheelCooldown = true;
-        // Brief cooldown so one flick = one item, not a burst.
-        setTimeout(() => { wheelCooldown = false; }, 260);
+        wheelLocked = true;          // no more steps until the wheel goes idle
       }
     };
 
@@ -221,6 +227,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
       if (snapTimer.current) clearTimeout(snapTimer.current);
+      if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
     };
   }, []);
 
@@ -340,11 +347,11 @@ export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }
   const stepRef = useRef<(dir: number) => void>(() => {});
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", touchAction: "pan-x", overscrollBehavior: "contain" }}>
       <Canvas
         camera={{ position: [0, 0, isMobile ? 6.5 : 4], fov: 46 }}
         gl={{ antialias: true, alpha: false }}
-        style={{ width: "100%", height: "100%", background: "#FFFFFF" }}
+        style={{ width: "100%", height: "100%", background: "#FFFFFF", touchAction: "pan-x" }}
         dpr={[1, 2]}
       >
         <color attach="background" args={["#FFFFFF"]} />
@@ -353,43 +360,29 @@ export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }
         </Suspense>
       </Canvas>
 
-      {/* Prev / next arrow buttons */}
-      <button
-        onClick={() => stepRef.current(-1)}
-        aria-label="Previous"
-        style={arrowStyle(isMobile, "left")}
-        className="carousel-arrow"
-      >
-        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
-      <button
-        onClick={() => stepRef.current(1)}
-        aria-label="Next"
-        style={arrowStyle(isMobile, "right")}
-        className="carousel-arrow"
-      >
-        <svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      </button>
+      {/* Prev / next — mobile only, thin chevrons centred at the bottom */}
+      {isMobile && (
+        <div style={{ position: "absolute", bottom: 28, left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 40, zIndex: 10 }}>
+          <button onClick={() => stepRef.current(-1)} aria-label="Previous" className="carousel-arrow" style={chevronBtn}>
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+          <button onClick={() => stepRef.current(1)} aria-label="Next" className="carousel-arrow" style={chevronBtn}>
+            <svg width="16" height="16" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function arrowStyle(isMobile: boolean, side: "left" | "right"): React.CSSProperties {
-  return {
-    position: "absolute",
-    top: "50%",
-    [side]: isMobile ? 16 : 32,
-    transform: "translateY(-50%)",
-    width: 44,
-    height: 44,
-    borderRadius: "50%",
-    background: "rgba(255,255,255,0.9)",
-    border: "1px solid #E8E8E8",
-    boxShadow: "0 2px 12px rgba(0,0,0,0.08)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    zIndex: 10,
-  };
-}
+const chevronBtn: React.CSSProperties = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  padding: 10,
+  lineHeight: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+

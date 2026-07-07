@@ -229,7 +229,7 @@ function CollectionView({
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+    <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", touchAction: "pan-x" }}>
       <CollectionGallery3D boxes={collectedBoxes} onSelect={handleSelect} userPhotos={userPhotos} />
 
       {/* Share + sign out */}
