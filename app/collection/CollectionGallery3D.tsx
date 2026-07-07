@@ -176,10 +176,11 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     if (!el) return;
 
     // Discrete stepping: each scroll/swipe gesture moves exactly one item.
-    const STEP_THRESHOLD = 45;
+    const STEP_THRESHOLD = 30;
+    const COOLDOWN_MS = 350;         // min time between steps (rides out momentum)
     let wheelAccum = 0;
-    let wheelLocked = false;         // true once we've stepped for this gesture
-    let wheelIdleTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastStepAt = 0;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
     const stepTo = (dir: number) => {
       targetFocus.current = Math.round(targetFocus.current) + dir;
@@ -188,19 +189,23 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const now = performance.now();
 
-      // While locked, swallow the momentum tail — don't accumulate toward a
-      // second step. The gesture only resets once the wheel goes idle (~120ms
-      // with no events), so one continuous scroll = exactly one item.
-      if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
-      wheelIdleTimer = setTimeout(() => { wheelLocked = false; wheelAccum = 0; }, 70);
-      if (wheelLocked) return;
+      // A pause between physical gestures resets the accumulator, so the fading
+      // momentum tail of a previous swipe can't add up to a phantom step.
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { wheelAccum = 0; }, 100);
+
+      // Fixed cooldown after a step. The trackpad momentum tail keeps firing
+      // events, but they're ignored until COOLDOWN_MS passes — so one swipe =
+      // one item, and a fresh swipe right after always registers.
+      if (now - lastStepAt < COOLDOWN_MS) return;
 
       wheelAccum += delta;
       if (Math.abs(wheelAccum) >= STEP_THRESHOLD) {
         stepTo(Math.sign(wheelAccum));
         wheelAccum = 0;
-        wheelLocked = true;          // no more steps until the wheel goes idle
+        lastStepAt = now;
       }
     };
 
@@ -227,7 +232,7 @@ function Gallery({ boxes, onSelect, userPhotos, isMobile, stepRef }: { boxes: Bo
       el.removeEventListener("touchmove", onTouchMove);
       el.removeEventListener("touchend", onTouchEnd);
       if (snapTimer.current) clearTimeout(snapTimer.current);
-      if (wheelIdleTimer) clearTimeout(wheelIdleTimer);
+      if (idleTimer) clearTimeout(idleTimer);
     };
   }, []);
 
@@ -365,10 +370,10 @@ export default function CollectionGallery3D({ boxes, onSelect, userPhotos = {} }
       {isMobile && (
         <div style={{ position: "absolute", top: "calc(50% + 46vw)", left: "50%", transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 48, zIndex: 10 }}>
           <button onClick={() => stepRef.current(-1)} aria-label="Previous" className="carousel-arrow" style={chevronBtn}>
-            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M7.5 2L3.5 6L7.5 10" stroke="#202020" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <button onClick={() => stepRef.current(1)} aria-label="Next" className="carousel-arrow" style={chevronBtn}>
-            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="18" height="18" viewBox="0 0 12 12" fill="none"><path d="M4.5 2L8.5 6L4.5 10" stroke="#202020" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         </div>
       )}
