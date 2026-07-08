@@ -229,7 +229,7 @@ export default function MasonryView({
   }, [columns]);
 
   return (
-    <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 32, paddingTop: 0 }}>
+    <div className="photos-scroll" style={{ flex: 1, overflowY: "auto", padding: 20, paddingTop: 0 }}>
       <div className="masonry-grid" style={{ columnCount: activeColumns, columnGap: 20 }}>
         {boxes.map((box, i) => (
           <div

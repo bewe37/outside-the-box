@@ -167,13 +167,13 @@ input[type="range"].col-slider::-moz-range-thumb {
 }
 
 /* Nav height token for filter dropdown alignment */
-:root { --nav-h: 64px; }
+:root { --nav-h: 44px; }
 
 /* ─── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   /* Nav */
   .nav-page-links { display: flex !important; }
-  .site-nav { padding-inline: 16px !important; height: 48px !important; }
+  .site-nav { padding-inline: 16px !important; height: 40px !important; }
   .nav-right-slot { display: none !important; }
 
   /* Collect button — always visible on mobile (no hover state) */
@@ -189,13 +189,13 @@ input[type="range"].col-slider::-moz-range-thumb {
   .index-thumb { display: block !important; }
   .index-date { display: block !important; }
 
-  /* Mobile nav is 48px — adjust the reserved space */
-  .page-shell { padding-top: 48px !important; }
+  /* Mobile nav is 48px — reserve that space */
+  .page-shell { padding-top: 40px !important; }
 
   /* Grid view — force 2 columns on mobile, tighter gaps */
   .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
   .masonry-card { margin-bottom: 12px !important; }
-  .photos-scroll { padding: 12px !important; padding-top: 8px !important; }
+  .photos-scroll { padding: 16px !important; padding-top: 8px !important; }
   .index-scroll { padding-top: 8px !important; padding-inline: 16px !important; }
 
   /* About page — stack sections normally, no indent */

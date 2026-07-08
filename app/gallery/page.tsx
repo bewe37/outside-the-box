@@ -411,7 +411,7 @@ function IndexView({
         position: "relative",
         overflowY: "auto",
         paddingTop: 24,
-        paddingInline: 32,
+        paddingInline: 20,
       }}
     >
       <DepthStack srcs={srcs} visible={hovered !== null} params={stackParams} spring={stackSpring} />

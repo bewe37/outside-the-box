@@ -16,12 +16,12 @@
 export const family = '"Geist", system-ui, sans-serif';
 
 export const size = {
-  caption: 10, // chips, tiny labels, photo counts
-  meta: 12,    // labels, values, small UI text — the workhorse
-  body: 14,    // running text, descriptions
-  subtitle: 18,// section headers
-  title: 24,   // lightbox titles, hero titles
-  display: 36, // page hero numbers (collection count)
+  caption: 9,  // chips, tiny labels, photo counts
+  meta: 11,    // labels, values, small UI text — the workhorse
+  body: 13,    // running text, descriptions
+  subtitle: 17,// section headers
+  title: 22,   // lightbox titles, hero titles
+  display: 34, // page hero numbers (collection count)
 } as const;
 
 export const tracking = {
@@ -39,10 +39,10 @@ export const weight = {
 // Convenient line-height pairings — keyed to size so line-height stays in
 // proportion. Use these instead of guessing `lineHeight` per element.
 export const leading = {
-  caption: "14px", // size.caption
-  meta: "16px",    // size.meta
-  body: "20px",    // size.body — relaxed for reading
-  subtitle: "24px",// size.subtitle
-  title: "28px",   // size.title
-  display: "40px", // size.display
+  caption: "13px", // size.caption
+  meta: "15px",    // size.meta
+  body: "19px",    // size.body — relaxed for reading
+  subtitle: "23px",// size.subtitle
+  title: "26px",   // size.title
+  display: "38px", // size.display
 } as const;
