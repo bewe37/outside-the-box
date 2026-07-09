@@ -233,7 +233,12 @@ function CollectionView({
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", background: "#000" }}>
+    // Fixed full-viewport, breaking out of page-shell's flex layout (and its
+    // 44px top padding reserved for the nav) — that padding sits in the body's
+    // own white background, which showed through as a white bar above the
+    // dark gallery. The gallery now fills the whole screen and the fixed nav
+    // simply floats on top of it (z-index 40 vs the nav's transparent bg).
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", background: "#000" }}>
       <CylinderGallery3D boxes={galleryBoxes} />
 
       {/* Share + sign out */}

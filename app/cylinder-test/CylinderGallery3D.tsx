@@ -880,9 +880,9 @@ function FisheyePost({ children }: { children: React.ReactNode }) {
   );
 }
 
-// Dark twin of the gallery's SidebarRow: uppercase label left, value right,
-// hairline divider on top.
-function DarkRow({ label, value }: { label: string; value: React.ReactNode }) {
+// Twin of the gallery's SidebarRow: uppercase label left, value right,
+// hairline divider on top, translucent-dark backing.
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div
       style={{
@@ -923,7 +923,7 @@ function DarkRow({ label, value }: { label: string; value: React.ReactNode }) {
 
 // HTML detail sidebar pinned to the right — same layout & typography as the
 // gallery's DetailPanel (caption line, uppercase title, description, metadata
-// rows, map link, close pill) but in the dark theme so it fits the cylinder.
+// rows, map link, close pill), dark themed to match the gallery.
 // Slides out when `closing` so the whole focus view exits in sync with the
 // hero flying back into the ring.
 function DetailPanel({ box, closing, onClose }: { box: Box; closing: boolean; onClose: () => void }) {
@@ -1030,10 +1030,10 @@ function DetailPanel({ box, closing, onClose }: { box: Box; closing: boolean; on
 
         {/* Metadata rows */}
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <DarkRow label="Artist" value={box.artist} />
-          <DarkRow label="Year" value={formatYear(box.year)} />
-          <DarkRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
-          <DarkRow
+          <DetailRow label="Artist" value={box.artist} />
+          <DetailRow label="Year" value={formatYear(box.year)} />
+          <DetailRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
+          <DetailRow
             label="Location"
             value={
               <a
