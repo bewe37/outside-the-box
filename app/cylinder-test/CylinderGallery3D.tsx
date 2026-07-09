@@ -4,6 +4,7 @@ import { useRef, useEffect, useMemo, useState } from "react";
 import { createPortal as createDomPortal } from "react-dom";
 import { Canvas, useFrame, useThree, createPortal } from "@react-three/fiber";
 import * as THREE from "three";
+import Image from "next/image";
 import { type Box, formatNeighbourhood, formatYear, formatAddress } from "@/lib/data";
 import { size, tracking, leading } from "@/lib/typography";
 
@@ -17,6 +18,7 @@ const CARDS_PER_ROW = 6;
 const ROW_SPACING = 3.4;               // vertical distance between row centres
 const ROW_ANGLE_OFFSET = Math.PI / CARDS_PER_ROW; // alternate rows stagger by half a slot
 const CARD_MAX = 2.65;                 // longest edge of a card, world units — slightly smaller for a bit more breathing room between cards
+const CARD_MAX_LANDSCAPE = 2.9;        // landscape cards read a bit small against portraits at the same longest-edge cap — give them a slightly larger one
 const JITTER_SEED_SCALE = 0.035;       // extra per-card rotation jitter, radians
 
 const SCROLL_TO_RADIANS = 0.0016;      // scroll px -> rotation radians
@@ -318,8 +320,8 @@ function ImageCard({
   }, [item.src]);
 
   const ar = aspect ?? 0.75; // portrait guess until the real ratio is known
-  const width = ar >= 1 ? CARD_MAX : CARD_MAX * ar;
-  const height = ar >= 1 ? CARD_MAX / ar : CARD_MAX;
+  const width = ar >= 1 ? CARD_MAX_LANDSCAPE : CARD_MAX * ar;
+  const height = ar >= 1 ? CARD_MAX_LANDSCAPE / ar : CARD_MAX;
   const geometry = useMemo(() => getCurvedGeometry(width, height), [width, height]);
   const uniforms = useMemo(
     () => ({ map: { value: texture }, reveal: { value: 0 }, time: { value: 0 } }),
@@ -403,11 +405,12 @@ const _tmpPos = new THREE.Vector3();
 const _tmpQuat = new THREE.Quaternion();
 const _identQuat = new THREE.Quaternion();
 
-function FocusedCard({ sel, closing, onExited }: { sel: Selection; closing: boolean; onExited: () => void }) {
+function FocusedCard({ sel, closing, photoSrc, onExited }: { sel: Selection; closing: boolean; photoSrc: string; onExited: () => void }) {
   const { item, startPos, startQuat, startScale, restPos, restQuat, restScale, startTexture, startAspect } = sel;
   // Start from the drum card's already-decoded texture/aspect so the hero is
   // visible on the very first frame — no vanish-then-pop while the hi-res
-  // copy streams in. Swap to the sharper texture once it arrives.
+  // copy streams in. Swap to the sharper texture once it arrives, and again
+  // whenever the panel's thumbnail strip switches to a different photo.
   const [texture, setTexture] = useState<THREE.Texture>(startTexture);
   const [aspect] = useState<number>(startAspect); // shape is fixed at click; hi-res swap keeps same aspect
   const meshRef = useRef<THREE.Mesh>(null);
@@ -420,7 +423,7 @@ function FocusedCard({ sel, closing, onExited }: { sel: Selection; closing: bool
     // Larger load for the hero view — the small drum texture would look soft
     // blown up this large. Stick to w=1200 / q=75 (both on Next's default
     // allow-lists; a non-listed width or quality returns HTTP 400).
-    const src = `/_next/image?url=${encodeURIComponent(item.src)}&w=1200&q=75`;
+    const src = `/_next/image?url=${encodeURIComponent(photoSrc)}&w=1200&q=75`;
     sharedTextureLoader.load(src, (tex) => {
       if (cancelled) return;
       tex.colorSpace = THREE.SRGBColorSpace;
@@ -430,7 +433,7 @@ function FocusedCard({ sel, closing, onExited }: { sel: Selection; closing: bool
       setTexture(tex);
     });
     return () => { cancelled = true; };
-  }, [item.src]);
+  }, [photoSrc]);
 
   // Same base geometry size as the drum card, so the pulled card is literally
   // the same shape at t=0; the parked size is reached by scaling up.
@@ -926,7 +929,19 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 // rows, map link, close pill), dark themed to match the gallery.
 // Slides out when `closing` so the whole focus view exits in sync with the
 // hero flying back into the ring.
-function DetailPanel({ box, closing, onClose }: { box: Box; closing: boolean; onClose: () => void }) {
+function DetailPanel({
+  box,
+  closing,
+  onClose,
+  photoIndex,
+  onSelectPhoto,
+}: {
+  box: Box;
+  closing: boolean;
+  onClose: () => void;
+  photoIndex: number;
+  onSelectPhoto: (i: number) => void;
+}) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setShown(true));
@@ -1051,6 +1066,38 @@ function DetailPanel({ box, closing, onClose }: { box: Box; closing: boolean; on
             }
           />
         </div>
+
+        {/* Additional photos — click a thumbnail to swap the focused hero's
+            texture in place, without re-running the fly-in/out animation. */}
+        {box.images && box.images.length > 1 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <span
+              style={{
+                fontSize: size.caption, lineHeight: leading.meta,
+                letterSpacing: tracking.loose, textTransform: "uppercase",
+                color: "rgba(255,255,255,0.5)",
+              }}
+            >
+              Photos
+            </span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {box.images.map((src, i) => (
+                <div
+                  key={src}
+                  onClick={() => onSelectPhoto(i)}
+                  style={{
+                    width: 56, height: 56, flexShrink: 0, position: "relative",
+                    cursor: "pointer",
+                    outline: i === photoIndex ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.2)",
+                    outlineOffset: -1,
+                  }}
+                >
+                  <Image src={src} alt="" fill style={{ objectFit: "cover" }} sizes="56px" />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>,
     document.body
@@ -1105,10 +1152,16 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
   // reports it has fully flown back does `selected` clear.
   const [selected, setSelected] = useState<Selection | null>(null);
   const [closing, setClosing] = useState(false);
+  // Which of the selected box's photos the hero + panel are showing — reset
+  // whenever a new card is opened so it always starts on the cover photo.
+  const [photoIndex, setPhotoIndex] = useState(0);
 
-  const open = (sel: Selection) => { setSelected(sel); setClosing(false); };
+  const open = (sel: Selection) => { setSelected(sel); setClosing(false); setPhotoIndex(0); };
   const requestClose = () => { if (selected) setClosing(true); };
   const finishClose = () => { setSelected(null); setClosing(false); };
+
+  const photos = selected?.item.box.images ?? [];
+  const photoSrc = photos[photoIndex] ?? selected?.item.src ?? "";
 
   // Close on Escape, like any lightbox.
   useEffect(() => {
@@ -1136,12 +1189,20 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
             onSelect={open}
           />
           {selected && <Dimmer closing={closing} target={DIM_OPACITY} onClose={requestClose} />}
-          {selected && <FocusedCard sel={selected} closing={closing} onExited={finishClose} />}
+          {selected && (
+            <FocusedCard sel={selected} closing={closing} photoSrc={photoSrc} onExited={finishClose} />
+          )}
         </FisheyePost>
       </Canvas>
 
       {selected && (
-        <DetailPanel box={selected.item.box} closing={closing} onClose={requestClose} />
+        <DetailPanel
+          box={selected.item.box}
+          closing={closing}
+          onClose={requestClose}
+          photoIndex={photoIndex}
+          onSelectPhoto={setPhotoIndex}
+        />
       )}
     </div>
   );
