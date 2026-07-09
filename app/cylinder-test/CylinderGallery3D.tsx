@@ -5,6 +5,7 @@ import { createPortal as createDomPortal } from "react-dom";
 import { Canvas, useFrame, useThree, createPortal } from "@react-three/fiber";
 import * as THREE from "three";
 import Image from "next/image";
+import { motion } from "motion/react";
 import { type Box, formatNeighbourhood, formatYear, formatAddress } from "@/lib/data";
 import { size, tracking, leading } from "@/lib/typography";
 
@@ -571,11 +572,13 @@ function Drum({
   items,
   yBand,
   selectedUid,
+  selectedPhotoSrc,
   onSelect,
 }: {
   items: PlacedImage[];
   yBand: number;
   selectedUid: string | null;
+  selectedPhotoSrc: string | null;
   onSelect: (sel: Selection) => void;
 }) {
   const spinRef = useRef<THREE.Group>(null);   // scroll rotation + vertical drift + idle auto-spin
@@ -696,14 +699,26 @@ function Drum({
         {/* Each card renders three times, stacked one yBand apart, so the
             vertical wrap never shows a gap or pop at the seam. */}
         {[0, yBand, -yBand].map((bandOffset) =>
-          items.map((item, i) => (
-            <ImageCard
-              key={`${i}-${bandOffset}`}
-              item={{ ...item, yOffset: item.yOffset + bandOffset }}
-              selected={selectedUid === item.uid}
-              onSelect={onSelect}
-            />
-          ))
+          items.map((item, i) => {
+            const isSelected = selectedUid === item.uid;
+            return (
+              <ImageCard
+                key={`${i}-${bandOffset}`}
+                item={{
+                  ...item,
+                  yOffset: item.yOffset + bandOffset,
+                  // While a card is open, the panel's photo carousel can step
+                  // through the box's other photos — carry that choice back
+                  // onto the drum card so it lands showing the same photo
+                  // that was on screen when the panel closes, not always the
+                  // box's original cover photo.
+                  src: isSelected && selectedPhotoSrc ? selectedPhotoSrc : item.src,
+                }}
+                selected={isSelected}
+                onSelect={onSelect}
+              />
+            );
+          })
         )}
       </group>
     </group>
@@ -933,14 +948,10 @@ function DetailPanel({
   box,
   closing,
   onClose,
-  photoIndex,
-  onSelectPhoto,
 }: {
   box: Box;
   closing: boolean;
   onClose: () => void;
-  photoIndex: number;
-  onSelectPhoto: (i: number) => void;
 }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -1066,36 +1077,148 @@ function DetailPanel({
             }
           />
         </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
 
-        {/* Additional photos — click a thumbnail to swap the focused hero's
-            texture in place, without re-running the fly-in/out animation. */}
-        {box.images && box.images.length > 1 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <span
+// Coverflow photo stack — ported directly from the gallery's DetailPanel
+// (app/components/DetailPanel.tsx): the active photo centres at full size,
+// with up to two neighbours on each side scaled down and pushed outward.
+// Sits between the 3D hero and the HTML sidebar panel, in its own fixed
+// layer (the hero itself is a WebGL mesh, not an HTML element, so this
+// can't just be laid out inline next to it).
+const COVERFLOW_STAGE_H = 420;
+const COVERFLOW_GAP = 24; // px gap between adjacent cards
+const coverflowScaleFor = (abs: number) => (abs === 0 ? 1 : abs === 1 ? 0.72 : 0.5);
+
+function PhotoCoverflow({
+  photos,
+  index,
+  closing,
+  onSelect,
+}: {
+  photos: string[];
+  index: number;
+  closing: boolean;
+  onSelect: (i: number) => void;
+}) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  const visible = shown && !closing;
+
+  // Load each photo's natural aspect ratio so cards keep their own shape,
+  // same as the gallery's carousel.
+  const [photoAspects, setPhotoAspects] = useState<Record<string, number>>({});
+  useEffect(() => {
+    photos.forEach((src) => {
+      if (photoAspects[src]) return;
+      const img = new window.Image();
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          setPhotoAspects((prev) => (prev[src] ? prev : { ...prev, [src]: img.naturalWidth / img.naturalHeight }));
+        }
+      };
+      img.src = src;
+    });
+  }, [photos, photoAspects]);
+
+  if (typeof document === "undefined") return null;
+
+  const cardWidth = (src: string) => Math.round(COVERFLOW_STAGE_H * (photoAspects[src] ?? 0.75));
+
+  // Precompute cumulative x offsets outward from the active card so the gap
+  // between neighbours is even regardless of each card's own orientation.
+  const xFor = (targetOffset: number): number => {
+    if (targetOffset === 0) return 0;
+    const dir = Math.sign(targetOffset);
+    let x = cardWidth(photos[index] ?? "") / 2; // active half-width
+    for (let step = 1; step <= Math.abs(targetOffset); step++) {
+      const idx = index + dir * step;
+      const w = cardWidth(photos[idx] ?? "") * coverflowScaleFor(step);
+      x += COVERFLOW_GAP + w / 2;
+      if (step < Math.abs(targetOffset)) x += w / 2;
+    }
+    return dir * x;
+  };
+
+  return createDomPortal(
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        bottom: 0,
+        left: 0,
+        // Clears the detail panel (min(38vw, 360px) wide) with a margin, so
+        // even the widest peeked neighbour never reaches under the panel.
+        right: "calc(min(38vw, 360px) + 40px)",
+        zIndex: 55, // above both the canvas and the panel (50) — this stack
+                    // is meant to sit fully beside the panel, but a stray
+                    // wide neighbour card overlapping it should still win
+                    // rather than being silently clipped underneath.
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        pointerEvents: "none",
+        opacity: visible ? 1 : 0,
+        transition: "opacity 0.3s ease",
+      }}
+    >
+      <div style={{ position: "relative", width: 340, height: COVERFLOW_STAGE_H, pointerEvents: "auto" }}>
+        {photos.map((src, i) => {
+          const offset = i - index;
+          const abs = Math.abs(offset);
+          if (abs > 2) return null; // active + up to two cards deep each side
+          const isActive = offset === 0;
+          const cardW = cardWidth(src);
+          return (
+            <motion.div
+              key={src}
+              onClick={() => !isActive && onSelect(i)}
+              initial={false}
+              animate={{
+                x: xFor(offset),
+                scale: coverflowScaleFor(abs),
+                opacity: abs === 0 ? 1 : abs === 1 ? 0.55 : 0.32,
+                zIndex: 5 - abs,
+              }}
+              transition={{ type: "spring", stiffness: 260, damping: 30, mass: 0.9 }}
               style={{
-                fontSize: size.caption, lineHeight: leading.meta,
-                letterSpacing: tracking.loose, textTransform: "uppercase",
-                color: "rgba(255,255,255,0.5)",
+                position: "absolute",
+                left: "50%",
+                top: 0,
+                marginLeft: -cardW / 2,
+                width: cardW,
+                height: COVERFLOW_STAGE_H,
+                cursor: isActive ? "default" : "pointer",
+                boxShadow: isActive ? "0 24px 70px rgba(0,0,0,0.35)" : "0 12px 40px rgba(0,0,0,0.25)",
+                backgroundColor: "#0a0a0a",
+                overflow: "hidden",
               }}
             >
-              Photos
-            </span>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {box.images.map((src, i) => (
-                <div
-                  key={src}
-                  onClick={() => onSelectPhoto(i)}
-                  style={{
-                    width: 56, height: 56, flexShrink: 0, position: "relative",
-                    cursor: "pointer",
-                    outline: i === photoIndex ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.2)",
-                    outlineOffset: -1,
-                  }}
-                >
-                  <Image src={src} alt="" fill style={{ objectFit: "cover" }} sizes="56px" />
-                </div>
-              ))}
-            </div>
+              <Image src={src} alt="" fill sizes="340px" style={{ objectFit: "cover" }} />
+            </motion.div>
+          );
+        })}
+
+        {/* Photo counter — tabular figures + centred digit slots so the width
+            never shifts between "1 / 3" and "3 / 3". */}
+        {photos.length > 1 && (
+          <div
+            style={{
+              position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)",
+              fontSize: size.caption, letterSpacing: tracking.loose, color: "#ffffff",
+              background: "rgba(0,0,0,0.55)", padding: "3px 10px", pointerEvents: "none", zIndex: 6,
+              display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums",
+            } as React.CSSProperties}
+          >
+            <span style={{ minWidth: "1.1ch", textAlign: "right" }}>{index + 1}</span>
+            <span>/</span>
+            <span style={{ minWidth: "1.1ch", textAlign: "left" }}>{photos.length}</span>
           </div>
         )}
       </div>
@@ -1186,6 +1309,7 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
             items={items}
             yBand={yBand}
             selectedUid={selected?.item.uid ?? null}
+            selectedPhotoSrc={selected ? photoSrc : null}
             onSelect={open}
           />
           {selected && <Dimmer closing={closing} target={DIM_OPACITY} onClose={requestClose} />}
@@ -1195,14 +1319,12 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
         </FisheyePost>
       </Canvas>
 
+      {selected && photos.length > 1 && (
+        <PhotoCoverflow photos={photos} index={photoIndex} closing={closing} onSelect={setPhotoIndex} />
+      )}
+
       {selected && (
-        <DetailPanel
-          box={selected.item.box}
-          closing={closing}
-          onClose={requestClose}
-          photoIndex={photoIndex}
-          onSelectPhoto={setPhotoIndex}
-        />
+        <DetailPanel box={selected.item.box} closing={closing} onClose={requestClose} />
       )}
     </div>
   );
