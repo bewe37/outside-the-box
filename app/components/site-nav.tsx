@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { size, tracking, leading } from "@/lib/typography";
 import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
+import { useTheme } from "@/app/components/theme-context";
 import { supabase } from "@/lib/supabase";
 
 function NavPageLink({ href, label, active, adaptive }: { href: string; label: string; active: boolean; adaptive: boolean }) {
@@ -15,7 +16,9 @@ function NavPageLink({ href, label, active, adaptive }: { href: string; label: s
   // and stays white on dark areas. Inactive links use a mid grey that reads
   // as muted in both modes.
   const activeColor = adaptive ? "#FFFFFF" : "#202020";
-  const mutedColor = adaptive ? "#888888" : "#A8A8A8";
+  // On the dark gallery pages the nav sits over the scene with no bar. Links
+  // rest at a slightly dimmed white and brighten to full white on hover/active.
+  const mutedColor = adaptive ? "rgba(255,255,255,0.65)" : "#A8A8A8";
   return (
     <Link
       href={href}
@@ -42,6 +45,10 @@ export function SiteNav() {
   const [count, setCount] = useState(0);
   const { right } = useNav();
   const { user } = useAuth();
+  // Routes go dark only when the page asserts its dark view is showing (e.g.
+  // /collection once the gallery is up, but not on the light sign-in / empty
+  // states; /cylinder-test always).
+  const { dark: isDark } = useTheme();
 
   useEffect(() => {
     if (!user) { setCount(0); return; }
@@ -73,17 +80,18 @@ export function SiteNav() {
         left: 0,
         right: 0,
         zIndex: 40,
-        background: "#FFFFFF",
+        background: isDark ? "transparent" : "#FFFFFF",
         borderBottom: "1px solid transparent",
+        transition: "background-color 0.2s ease",
       }}
     >
       {/* Wordmark */}
-      <Link href="/gallery" style={{ ...wordmark, color: "#202020" }}>
+      <Link href="/gallery" style={{ ...wordmark, color: isDark ? "#FFFFFF" : "#202020" }}>
         OutsideTheBox
       </Link>
 
       {/* Center slot — grid/filter/index controls */}
-      <div className="nav-right-slot" style={{ color: "#202020" }}>
+      <div className="nav-right-slot" style={{ color: isDark ? "#FFFFFF" : "#202020" }}>
         <AnimatePresence mode="wait">
           {right && (
             <motion.div
@@ -102,7 +110,7 @@ export function SiteNav() {
       {/* Nav links — right */}
       <div className="nav-page-links">
         {links.map(({ href, label }) => (
-          <NavPageLink key={href} href={href} label={label} active={pathname === href} adaptive={false} />
+          <NavPageLink key={href} href={href} label={label} active={pathname === href} adaptive={isDark} />
         ))}
       </div>
     </div>

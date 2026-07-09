@@ -1,18 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { boxes, type Box } from "@/lib/data";
 import { size, tracking, weight, leading } from "@/lib/typography";
 import { useAuth } from "@/app/components/auth-context";
+import { useSetDarkTheme } from "@/app/components/theme-context";
 import { supabase } from "@/lib/supabase";
-import { DetailPanel } from "@/app/components/DetailPanel";
 import { Toast } from "@/app/components/Toast";
 import type { Session } from "@supabase/supabase-js";
 
-const CollectionGallery3D = dynamic(() => import("./CollectionGallery3D"), { ssr: false });
+const CylinderGallery3D = dynamic(() => import("@/app/cylinder-test/CylinderGallery3D"), { ssr: false });
 
 const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
 
@@ -174,8 +174,8 @@ export default function CollectionPage() {
 // from CollectionPage so the canvas never re-renders when overlays open/close.
 
 function CollectionView({
-  collectedBoxes, collected, userPhotos, username, setUsername,
-  session, signOut, toggleCollect, swapPhoto,
+  collectedBoxes, userPhotos, username, setUsername,
+  session, signOut,
 }: {
   collectedBoxes: Box[];
   collected: Set<number>;
@@ -187,26 +187,30 @@ function CollectionView({
   toggleCollect: (id: number) => void;
   swapPhoto: (id: number, file: File) => Promise<void>;
 }) {
-  const [selected, setSelected] = useState<Box | null>(null);
+  // The gallery view is dark — assert it so the nav flips dark and the
+  // route transition washes to black (only reached when signed in with boxes;
+  // the light sign-in / empty states never mount this component).
+  useSetDarkTheme(true);
+
   const [showShareModal, setShowShareModal] = useState(false);
   const [usernameInput, setUsernameInput] = useState("");
   const [usernameError, setUsernameError] = useState("");
   const [usernameLoading, setUsernameLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleSelect = useCallback((box: Box) => setSelected(box), []);
-
   useEffect(() => {
-    // Arrow navigation is owned by the detail panel (photos, then box rollover).
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (showShareModal) { setShowShareModal(false); return; }
-        setSelected(null);
-      }
+      if (e.key === "Escape" && showShareModal) setShowShareModal(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, collectedBoxes, showShareModal]);
+  }, [showShareModal]);
+
+  // Feed the cylinder gallery each box with its cover set to the user's
+  // custom photo when present, so the drum shows the collected imagery.
+  const galleryBoxes = collectedBoxes.map((b) =>
+    userPhotos[b.id] ? { ...b, images: [userPhotos[b.id], ...(b.images ?? [])] } : b
+  );
 
   async function saveUsername() {
     if (!session) return;
@@ -229,8 +233,8 @@ function CollectionView({
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", touchAction: "pan-x" }}>
-      <CollectionGallery3D boxes={collectedBoxes} onSelect={handleSelect} userPhotos={userPhotos} />
+    <div style={{ flex: 1, minHeight: 0, position: "relative", overflow: "hidden", background: "#000" }}>
+      <CylinderGallery3D boxes={galleryBoxes} />
 
       {/* Share + sign out */}
       <div style={{ position: "absolute", bottom: 20, right: 20, zIndex: 10, display: "flex", gap: 8 }}>
@@ -277,40 +281,6 @@ function CollectionView({
             </motion.div>
           </>
         )}
-      </AnimatePresence>
-
-      {/* Full-screen detail overlay */}
-      <AnimatePresence>
-        {selected && (() => {
-          const i = collectedBoxes.findIndex((b) => b.id === selected.id);
-          const coverOf = (b: Box) => userPhotos[b.id] ?? b.images?.[0];
-          return (
-            <motion.div
-              key="detail"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-              style={{ position: "fixed", inset: 0, zIndex: 60 }}
-            >
-              <DetailPanel
-                box={selected}
-                displayNumber={i + 1}
-                isCollected={collected.has(selected.id)}
-                onCollect={() => toggleCollect(selected.id)}
-                onPrev={() => { if (i > 0) setSelected(collectedBoxes[i - 1]); }}
-                onNext={() => { if (i < collectedBoxes.length - 1) setSelected(collectedBoxes[i + 1]); }}
-                hasPrev={i > 0}
-                hasNext={i < collectedBoxes.length - 1}
-                prevSrc={i > 0 ? coverOf(collectedBoxes[i - 1]) : undefined}
-                nextSrc={i < collectedBoxes.length - 1 ? coverOf(collectedBoxes[i + 1]) : undefined}
-                userPhoto={userPhotos[selected.id]}
-                onClose={() => setSelected(null)}
-                capturedLabel="COLLECTED"
-              />
-            </motion.div>
-          );
-        })()}
       </AnimatePresence>
     </div>
   );
@@ -484,10 +454,12 @@ function HoverPillBtn({ children, onClick, muted = false }: { children: React.Re
       style={{
         fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
         fontFamily: "inherit", cursor: "pointer",
-        background: hovered ? "#F4F4F4" : "#FFFFFF",
-        border: "1px solid #E8E8E8",
+        background: hovered ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.2)",
         padding: "7px 14px",
-        color: muted ? (hovered ? "#202020" : "#AAAAAA") : "#202020",
+        color: muted
+          ? (hovered ? "#FFFFFF" : "rgba(255,255,255,0.55)")
+          : (hovered ? "#FFFFFF" : "rgba(255,255,255,0.85)"),
         transition: "background 0.15s ease, color 0.15s ease",
       }}
     >
@@ -518,16 +490,4 @@ const ctaButton: React.CSSProperties = {
 const signOutButton: React.CSSProperties = {
   fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
   color: "#CACACA", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0,
-};
-
-const shareBtnStyle: React.CSSProperties = {
-  fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
-  fontFamily: "inherit", color: "#202020", background: "#FFFFFF",
-  border: "1px solid #E8E8E8", padding: "7px 14px", cursor: "pointer",
-};
-
-const signOutBtnStyle: React.CSSProperties = {
-  fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
-  fontFamily: "inherit", color: "#AAAAAA", background: "#FFFFFF",
-  border: "1px solid #E8E8E8", padding: "7px 14px", cursor: "pointer",
 };
