@@ -965,9 +965,11 @@ function DetailPanel({ box, closing, onClose }: { box: Box; closing: boolean; on
         borderLeft: "1px solid rgba(255,255,255,0.1)",
         overflowY: "auto",
         // Slides in fully from off-screen right — "pushed in" from the edge —
-        // and slides back out the same way on close.
+        // and slides back out the same way on close. Matches FOCUS_DURATION /
+        // FOCUS_CLOSE_DURATION (the hero image's fly-in/out time) so the
+        // panel and the image finish animating together in both directions.
         transform: visible ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1)",
+        transition: `transform ${closing ? FOCUS_CLOSE_DURATION : FOCUS_DURATION}s cubic-bezier(0.22,1,0.36,1)`,
       }}
     >
       {/* Top bar: close pill on the right (mirrors the gallery panel header). */}
