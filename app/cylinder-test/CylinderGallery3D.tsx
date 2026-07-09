@@ -16,7 +16,7 @@ const RADIUS = 4.6;                    // tighter radius so a 6-card row fills t
 const CARDS_PER_ROW = 6;
 const ROW_SPACING = 3.4;               // vertical distance between row centres
 const ROW_ANGLE_OFFSET = Math.PI / CARDS_PER_ROW; // alternate rows stagger by half a slot
-const CARD_MAX = 2.9;                  // longest edge of a card, world units
+const CARD_MAX = 2.65;                 // longest edge of a card, world units — slightly smaller for a bit more breathing room between cards
 const JITTER_SEED_SCALE = 0.035;       // extra per-card rotation jitter, radians
 
 const SCROLL_TO_RADIANS = 0.0016;      // scroll px -> rotation radians
@@ -57,6 +57,7 @@ function hash(n: number) {
 }
 
 interface PlacedImage {
+  uid: string;      // unique per placed card (a box may be tiled several times)
   src: string;
   box: Box;         // full record, so a click can open the detail panel
   angle: number;    // position around the cylinder, radians
@@ -566,12 +567,12 @@ function Dimmer({ closing, target, onClose }: { closing: boolean; target: number
 function Drum({
   items,
   yBand,
-  selectedSrc,
+  selectedUid,
   onSelect,
 }: {
   items: PlacedImage[];
   yBand: number;
-  selectedSrc: string | null;
+  selectedUid: string | null;
   onSelect: (sel: Selection) => void;
 }) {
   const spinRef = useRef<THREE.Group>(null);   // scroll rotation + vertical drift + idle auto-spin
@@ -591,7 +592,7 @@ function Drum({
   // behind the detail view. A ref keeps the listeners (registered once)
   // reading the current value without re-binding.
   const frozen = useRef(false);
-  useEffect(() => { frozen.current = selectedSrc !== null; }, [selectedSrc]);
+  useEffect(() => { frozen.current = selectedUid !== null; }, [selectedUid]);
 
   useEffect(() => {
     lastInputAt.current = performance.now();
@@ -599,6 +600,11 @@ function Drum({
     function registerInput() { lastInputAt.current = performance.now(); }
 
     function onWheel(e: WheelEvent) {
+      // Not passive: this gesture drives the drum, not the page — without
+      // preventDefault the browser ALSO scrolls the real page underneath,
+      // so everything (including the fixed Share/Sign-out buttons) visibly
+      // jumps in sync with the rotation.
+      e.preventDefault();
       if (frozen.current) return;
       targetRot.current += e.deltaY * SCROLL_TO_RADIANS;
       targetY.current += e.deltaY * SCROLL_TO_Y;
@@ -621,7 +627,7 @@ function Drum({
       mouseTarget.current.x = (e.clientX / window.innerWidth) * 2 - 1;
       mouseTarget.current.y = (e.clientY / window.innerHeight) * 2 - 1;
     }
-    window.addEventListener("wheel", onWheel, { passive: true });
+    window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: true });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
@@ -691,7 +697,7 @@ function Drum({
             <ImageCard
               key={`${i}-${bandOffset}`}
               item={{ ...item, yOffset: item.yOffset + bandOffset }}
-              selected={selectedSrc === item.src}
+              selected={selectedUid === item.uid}
               onSelect={onSelect}
             />
           ))
@@ -1058,12 +1064,20 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
     const n = withUpload.length;
     if (n === 0) return { items: [] as PlacedImage[], yBand: ROW_SPACING };
 
-    const numRows = Math.max(1, Math.ceil(n / CARDS_PER_ROW));
+    // Small collections would leave the drum mostly empty (one sparse row in a
+    // sea of black). Instead, tile the collected boxes — repeating them around
+    // and down the cylinder — until there are enough to fill a comfortable
+    // number of rows, so the drum always feels populated regardless of size.
+    const MIN_ROWS = 5;
+    const targetCount = Math.max(n, MIN_ROWS * CARDS_PER_ROW);
+    const filled: Box[] = Array.from({ length: targetCount }, (_, i) => withUpload[i % n]);
+
+    const numRows = Math.max(1, Math.ceil(filled.length / CARDS_PER_ROW));
     const angleStep = (Math.PI * 2) / CARDS_PER_ROW;
     // Centre the rows vertically around y=0 so the drum starts framed nicely.
     const yStart = -((numRows - 1) * ROW_SPACING) / 2;
 
-    const placed = withUpload.map((box, i) => {
+    const placed = filled.map((box, i) => {
       const row = Math.floor(i / CARDS_PER_ROW);
       const slot = i % CARDS_PER_ROW;
       // Cards sit at an exact, evenly-spaced slot angle — no per-card jitter
@@ -1072,6 +1086,7 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
       const angle = slot * angleStep + (row % 2 === 1 ? ROW_ANGLE_OFFSET : 0);
       const tilt = (hash(i + 100) - 0.5) * 2 * JITTER_SEED_SCALE;
       return {
+        uid: `${box.id}-${i}`,
         src: box.images![0],
         box,
         angle,
@@ -1115,7 +1130,7 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
           <Drum
             items={items}
             yBand={yBand}
-            selectedSrc={selected?.item.src ?? null}
+            selectedUid={selected?.item.uid ?? null}
             onSelect={open}
           />
           {selected && <Dimmer closing={closing} target={DIM_OPACITY} onClose={requestClose} />}

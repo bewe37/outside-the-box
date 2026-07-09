@@ -73,9 +73,9 @@ input[type="range"].col-slider::-moz-range-thumb {
 .nav-page-links a {
   transition: color 0.15s ease;
 }
-.nav-page-links a:hover {
-  color: #202020 !important;
-}
+/* Hover colour is driven by the inline React styles (theme-aware: white on
+   dark pages, #202020 on light) — a blanket !important hover rule here used
+   to force every link dark even on the dark gallery pages. */
 
 .nav-right-slot {
   position: absolute;
