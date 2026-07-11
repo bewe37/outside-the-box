@@ -14,6 +14,13 @@ const ThemeContext = createContext<ThemeCtx>({ dark: false, setDark: () => {} })
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false);
+  // What consumers actually see. Navigating between two dark pages flips the
+  // raw value true→false→true within milliseconds (the old page's cleanup +
+  // the pathname reset below, then the new page re-asserting) — if consumers
+  // saw that transient, the nav text, body background and route wipe all
+  // flashed light for a beat on every navigation. The raw value has to hold
+  // for 80ms before it's exposed, so flip-flops never reach the UI.
+  const [settledDark, setSettledDark] = useState(false);
   const pathname = usePathname();
   const firstRun = useRef(true);
 
@@ -27,15 +34,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setDark(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (dark === settledDark) return;
+    const id = setTimeout(() => setSettledDark(dark), 80);
+    return () => clearTimeout(id);
+  }, [dark, settledDark]);
+
   // Body's own background shows through the strip behind the floating nav
   // (which is transparent) on pages shorter than the viewport — keep it in
   // sync with the active page's theme so that strip isn't always white.
   useEffect(() => {
-    document.body.style.background = dark ? "#000000" : "";
-  }, [dark]);
+    document.body.style.background = settledDark ? "#000000" : "";
+  }, [settledDark]);
 
   return (
-    <ThemeContext.Provider value={{ dark, setDark }}>
+    <ThemeContext.Provider value={{ dark: settledDark, setDark }}>
       {children}
     </ThemeContext.Provider>
   );

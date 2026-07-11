@@ -799,7 +799,13 @@ function Drum({
     let lastY = 0;
     function onTouchStart(e: TouchEvent) { lastX = e.touches[0].clientX; lastY = e.touches[0].clientY; }
     function onTouchMove(e: TouchEvent) {
+      // Frozen = detail panel open — bail BEFORE preventDefault so the
+      // panel's own touch scrolling stays native.
       if (frozen.current) return;
+      // Like the wheel handler: this gesture drives the drum, not the page.
+      // Without preventDefault the browser also rubber-bands/scrolls the
+      // page in sync with the rotation (needs passive: false below).
+      e.preventDefault();
       const dx = lastX - e.touches[0].clientX;
       const dy = lastY - e.touches[0].clientY;
       lastX = e.touches[0].clientX;
@@ -814,7 +820,7 @@ function Drum({
     }
     window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("touchstart", onTouchStart, { passive: true });
-    window.addEventListener("touchmove", onTouchMove, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
     window.addEventListener("pointermove", onPointerMove, { passive: true });
     return () => {
       window.removeEventListener("wheel", onWheel);
