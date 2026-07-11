@@ -3,11 +3,11 @@
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, useVelocity } from "motion/react";
+import { createPortal } from "react-dom";
+import { AnimatePresence, LayoutGroup, motion, useMotionValue, useReducedMotion, useSpring, useTransform, useVelocity } from "motion/react";
 import { boxes, formatNeighbourhood, formatAddress, formatYear, type Box } from "@/lib/data";
 import { size, tracking, leading } from "@/lib/typography";
 import { useAuth } from "@/app/components/auth-context";
-import { useHideNav } from "@/app/components/nav-context";
 import { useSetDarkTheme } from "@/app/components/theme-context";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
@@ -145,9 +145,14 @@ export default function GalleryPage() {
 
 
   return (
-    // Fixed full-viewport, breaking out of page-shell's top padding (which
-    // sits in the body's own background) — both gallery views fill the
-    // screen edge to edge; the nav pieces float on top.
+    // LayoutGroup: the index list's cursor preview and the detail hero share
+    // a layoutId, but the detail overlay is portalled to <body> (it must
+    // stack ABOVE the fixed nav, and the page root's z-index traps it
+    // otherwise). The group keeps the morph coordinated across that portal.
+    <LayoutGroup>
+    {/* Fixed full-viewport, breaking out of page-shell's top padding (which
+        sits in the body's own background) — both gallery views fill the
+        screen edge to edge; the nav pieces float on top. */}
     <div
       style={{
         display: "flex",
@@ -203,16 +208,32 @@ export default function GalleryPage() {
         </AnimatePresence>
       </div>
 
-      {/* Detail overlay — dark floating panel + hero that morphs from the
-          clicked grid card (shared layoutId). */}
-      <AnimatePresence>
-        {gridSelected && (
-          <div key="grid-detail" style={{ position: "fixed", inset: 0, zIndex: 60 }}>
-            <GridDetail key={gridSelected.id} box={gridSelected} aspect={heroAspect} onClose={() => setGridSelected(null)} />
-          </div>
-        )}
-      </AnimatePresence>
     </div>
+
+    {/* Detail overlay — dark floating panel + hero that morphs from the
+        clicked grid card (shared layoutId). Portalled to <body> so it
+        stacks ABOVE the fixed nav (z 40) — the page root's own z-index
+        would otherwise cap it below, forcing the nav to hide/re-show.
+        Deliberately NOT keyed by box id: prev/next navigation swaps the
+        box in place, and a remount would replay the panel slide-in. */}
+    {typeof document !== "undefined" &&
+      createPortal(
+        <AnimatePresence>
+          {gridSelected && (
+            <div key="grid-detail" style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+              <GridDetail
+                box={gridSelected}
+                boxes={filtered}
+                aspect={heroAspect}
+                onSelectBox={setGridSelected}
+                onClose={() => setGridSelected(null)}
+              />
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </LayoutGroup>
   );
 }
 
@@ -292,7 +313,6 @@ function IndexView({
             index={i}
             titleX={titleX}
             yearX={yearX}
-            dimmed={hovered !== null && hovered.id !== box.id}
             onHover={() => {
               if (!canHover) return;
               setHandoff(false);
@@ -462,7 +482,6 @@ function IndexRow({
   index,
   titleX,
   yearX,
-  dimmed,
   onHover,
   onSelect,
 }: {
@@ -470,7 +489,6 @@ function IndexRow({
   index: number;
   titleX: number;
   yearX: number;
-  dimmed: boolean;
   onHover: () => void;
   onSelect: () => void;
 }) {
@@ -512,22 +530,19 @@ function IndexRow({
         textAlign: "left",
         fontFamily: "inherit",
         // Colour lives on .index-row so the hover inversion can flip it.
-        // Dim everything except the hovered row (motion owns `opacity` for
-        // the entrance stagger, so the dim rides on filter instead). This
-        // inline transition overrides the class's, so re-declare color here.
-        filter: dimmed ? "brightness(0.35)" : "brightness(1)",
-        transition: "filter 0.25s ease, color 0.55s ease",
+        // Non-hovered rows stay full white — no dimming. This inline
+        // transition overrides the class's, so re-declare color here.
+        transition: "color 0.55s ease",
       } as React.CSSProperties}
       className="index-row"
     >
-      {/* number + artist share the first column (number fixed, artist fills) */}
+      {/* number + neighbourhood share the first column (number fixed) */}
       <span style={{ display: "flex", gap: 16, minWidth: 0, paddingRight: 16 }}>
         <span style={{ ...cell, flexShrink: 0, width: 44 }}>{String(index + 1).padStart(3, "0")}</span>
-        <span style={{ ...cell, textTransform: "uppercase" }}>{box.artist}</span>
+        <span style={{ ...cell, textTransform: "uppercase" }}>{formatNeighbourhood(box.neighbourhood)}</span>
       </span>
       <span style={{ ...cell, paddingRight: 16 }}>{box.title}</span>
-      {/* uppercase so "Unknown" reads as UNKNOWN, matching the artist column */}
-      <span style={{ ...cell, textTransform: "uppercase" }}>{formatYear(box.year)}</span>
+      <span style={{ ...cell, textTransform: "uppercase" }}>{box.artist}</span>
     </motion.button>
   );
 }
@@ -548,15 +563,76 @@ function GridDetailRow({ label, value }: { label: string; value: React.ReactNode
   );
 }
 
-function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClose: () => void }) {
+function GridDetail({
+  box,
+  boxes,
+  aspect,
+  onSelectBox,
+  onClose,
+}: {
+  box: Box;
+  boxes: Box[];
+  aspect: number;
+  onSelectBox: (b: Box) => void;
+  onClose: () => void;
+}) {
   const photos = box.images ?? [];
-  // Keyed by box.id at the call site, so this remounts (photoIndex resets to 0)
-  // whenever a different box opens — no effect needed to reset it.
   const [photoIndex, setPhotoIndex] = useState(0);
+  // Direction of the last change: ±1 for prev/next box (hero slides that
+  // way), 0 for a photo-strip step (plain crossfade).
+  const [dir, setDir] = useState(0);
+
+  // The panel stays mounted across prev/next (no remount = no replayed
+  // slide-in), so the photo index resets here when the box swaps — the
+  // render-time adjustment pattern, no effect needed.
+  const [prevBoxId, setPrevBoxId] = useState(box.id);
+  if (prevBoxId !== box.id) {
+    setPrevBoxId(box.id);
+    setPhotoIndex(0);
+  }
+
   const heroSrc = photos[photoIndex] ?? photos[0] ?? "";
 
-  // Get the floating nav (mascot + menu) out of the way while this is open.
-  useHideNav(true);
+  // `aspect` (the prop) is the first photo's ratio, captured at click for the
+  // morph. Stepping to a sibling photo or an adjacent box must reshape the
+  // hero, or objectFit:cover crops it wrong. The box keeps its LAST KNOWN
+  // shape until the incoming photo has actually loaded (never reverting to
+  // the stale click-time aspect mid-swap — that revert was itself animating
+  // as a morph), and the reshape is INSTANT: onLoad writes the new size to
+  // the DOM before React re-renders, so Motion's layout projection never
+  // sees a delta to animate. The open morph from the cursor preview still
+  // animates normally.
+  const heroRef = useRef<HTMLDivElement>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
+  const heroAspect = measured ?? aspect;
+  // Guards late onLoads from an exiting photo stomping the current one.
+  const currentSrcRef = useRef(heroSrc);
+  useEffect(() => {
+    currentSrcRef.current = heroSrc;
+  });
+
+  // Prev/next box, wrapping at the ends so the archive browses as a loop.
+  const navigate = (step: -1 | 1) => {
+    const idx = boxes.findIndex((b) => b.id === box.id);
+    if (idx === -1 || boxes.length < 2) return;
+    setDir(step);
+    onSelectBox(boxes[(idx + step + boxes.length) % boxes.length]);
+  };
+
+  // Arrow keys page through boxes (Escape/close is owned by the parent).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") navigate(-1);
+      if (e.key === "ArrowRight") navigate(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [box.id, boxes]);
+
+  // No useHideNav here: the overlay is portalled to <body> above the nav
+  // (z 60 vs 40), so the backdrop simply covers it — the nav never
+  // unmounts or fades, and reappears instantly when the overlay closes.
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     formatAddress(box.address) + ", Toronto, Ontario"
@@ -602,17 +678,18 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
         }}
       >
         <motion.div
+          ref={heroRef}
           layoutId="index-hero"
           exit={{ opacity: 0 }}
-          transition={{ type: "spring", visualDuration: 0.55, bounce: 0.12 }}
+          transition={{ type: "spring", visualDuration: 0.55, bounce: 0 }}
           className="detail-hero"
           style={{
             position: "relative",
-            width: `min(100%, calc(76vh * ${aspect}))`,
-            aspectRatio: String(aspect),
+            width: `min(100%, calc(76vh * ${heroAspect}))`,
+            aspectRatio: String(heroAspect),
             // Exposed for the mobile stylesheet, which re-derives the hero's
             // width from a height cap instead of the desktop formula above.
-            "--hero-aspect": String(aspect),
+            "--hero-aspect": String(heroAspect),
             borderRadius: 4,
             overflow: "hidden",
             boxShadow: "0 30px 90px rgba(0,0,0,0.6)",
@@ -620,24 +697,60 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
             pointerEvents: "auto",
           } as React.CSSProperties}
         >
-          {/* Low-res underlay: the same 300px variant the hover preview
-              already loaded, so the morphing box shows the photo instantly
-              instead of flashing dark while the hi-res copy fetches. */}
-          <Image
-            src={heroSrc}
-            alt=""
-            fill
-            sizes="300px"
-            style={{ objectFit: "cover" }}
-          />
-          <Image
-            key={heroSrc}
-            src={heroSrc}
-            alt={box.title}
-            fill
-            sizes="60vw"
-            style={{ objectFit: "cover" }}
-          />
+          {/* Photo swap: prev/next slides the new photo in from the side you
+              travelled (dir ±1); a photo-strip step crossfades in place
+              (dir 0). The hero's overflow:hidden clips the slide. */}
+          <AnimatePresence initial={false} custom={dir}>
+            <motion.div
+              key={heroSrc}
+              custom={dir}
+              variants={{
+                enter: (d: number) => ({ x: d * 60, opacity: 0 }),
+                center: { x: 0, opacity: 1 },
+                exit: (d: number) => ({ x: d * -60, opacity: 0 }),
+              }}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              style={{ position: "absolute", inset: 0 }}
+            >
+              {/* Low-res underlay: the small variant is usually cached, so
+                  the swap shows the photo instantly while hi-res fetches. */}
+              <Image
+                src={heroSrc}
+                alt=""
+                fill
+                sizes="300px"
+                style={{ objectFit: "cover" }}
+              />
+              <Image
+                src={heroSrc}
+                alt={box.title}
+                fill
+                sizes="60vw"
+                style={{ objectFit: "cover" }}
+                onLoad={(e) => {
+                  const img = e.currentTarget;
+                  if (img.naturalWidth === 0) return;
+                  if (heroSrc !== currentSrcRef.current) return; // late load from an exiting photo
+                  const ratio = img.naturalWidth / img.naturalHeight;
+                  // Snap the box to the new shape BEFORE the re-render:
+                  // Motion only animates layout deltas it observes across a
+                  // render, so pre-applying the size makes the reshape
+                  // instant. The setMeasured render then matches what's
+                  // already in the DOM (zero delta, no animation).
+                  const el = heroRef.current;
+                  if (el) {
+                    el.style.width = `min(100%, calc(76vh * ${ratio}))`;
+                    el.style.aspectRatio = String(ratio);
+                    el.style.setProperty("--hero-aspect", String(ratio));
+                  }
+                  setMeasured(ratio);
+                }}
+              />
+            </motion.div>
+          </AnimatePresence>
         </motion.div>
       </div>
 
@@ -662,20 +775,34 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
           overflowY: "auto",
         }}
       >
-        {/* Close */}
-        <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, padding: 0, borderRadius: "50%", background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.85)", cursor: "pointer", outline: "none" }}
-          >
+        {/* Prev / next / close */}
+        <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "16px 20px", flexShrink: 0 }}>
+          <button onClick={() => navigate(-1)} aria-label="Previous box" style={panelButton}>
+            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+              <path d="M6.5 1L2.5 5L6.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button onClick={() => navigate(1)} aria-label="Next box" style={panelButton}>
+            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+              <path d="M3.5 1L7.5 5L3.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button onClick={onClose} aria-label="Close" style={panelButton}>
             <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
               <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
-        <div className="detail-body" style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="detail-body" style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px" }}>
+        {/* Re-keyed per box so the text quickly fades in on prev/next. */}
+        <motion.div
+          key={box.id}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          style={{ display: "flex", flexDirection: "column", gap: 24 }}
+        >
           {/* Caption + title */}
           <div className="detail-title-block" style={{ display: "flex", flexDirection: "column" }}>
             <span style={{ fontSize: 11, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>
@@ -717,7 +844,10 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
                 {photos.map((src, i) => (
                   <div
                     key={src}
-                    onClick={() => setPhotoIndex(i)}
+                    onClick={() => {
+                      setDir(0); // strip steps crossfade in place, no slide
+                      setPhotoIndex(i);
+                    }}
                     style={{ width: 56, height: 56, flexShrink: 0, position: "relative", cursor: "pointer", outline: i === photoIndex ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.2)", outlineOffset: -1, opacity: i === photoIndex ? 1 : 0.65, transition: "opacity 0.15s ease" }}
                   >
                     <Image src={src} alt="" fill style={{ objectFit: "cover" }} sizes="56px" />
@@ -726,9 +856,26 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
               </div>
             </div>
           )}
+        </motion.div>
         </div>
       </motion.div>
     </>
   );
 }
+
+// Shared circular icon button for the detail panel's header (prev/next/close).
+const panelButton: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 38,
+  height: 38,
+  padding: 0,
+  borderRadius: "50%",
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,0.2)",
+  color: "rgba(255,255,255,0.85)",
+  cursor: "pointer",
+  outline: "none",
+};
 

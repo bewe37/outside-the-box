@@ -278,6 +278,7 @@ input[type="range"].col-slider::-moz-range-thumb {
     padding-top: 20px !important;
   }
   .detail-title-block {
-    padding-right: 60px;
+    /* Clear the header's button group (prev / next / close ≈ 130px + inset). */
+    padding-right: 150px;
   }
 }

@@ -96,7 +96,16 @@ interface Selection {
   restScale: THREE.Vector3;
   startTexture: THREE.Texture;
   startAspect: number;
+  // True when this selection came from prev/next navigation while a focus
+  // view was already open: the hero renders already parked (no fly-in) —
+  // the user asked for a direct swap, not a re-run of the open animation.
+  parked?: boolean;
 }
+
+// Programmatic card selection, used by the detail panel's prev/next: each
+// (canonical) drum card registers a function that captures its poses and
+// opens it, exactly like a click would.
+type SelectRegistry = React.RefObject<Map<string, () => void>>;
 
 // A plane bent into a shallow cylindrical arc — bows away from the viewer at
 // the edges, matching the reference's curved-card look. Built once per size
@@ -297,17 +306,20 @@ function ImageCard({
   selected,
   entranceDelay,
   leanRef,
+  registry,
   onSelect,
 }: {
   item: PlacedImage;
   selected: boolean;
   entranceDelay: number;                 // seconds before this card's load-time fade-in starts
   leanRef: React.RefObject<number>;      // shared signed yaw (radians) — the drum's inertia lean
+  registry: SelectRegistry | null;       // canonical band copy only — prev/next selects through this
   onSelect: (sel: Selection) => void;
 }) {
   const [aspect, setAspect] = useState<number | null>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
   const [hovered, setHovered] = useState(false);
+  const meshRef = useRef<THREE.Mesh>(null);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const popRef = useRef<THREE.Group>(null);   // lifts + scales the card toward the camera on hover
   const leanGroupRef = useRef<THREE.Group>(null); // yaws with the drum's momentum
@@ -398,6 +410,47 @@ function ImageCard({
     [texture, width, height]
   );
 
+  // Capture two poses (force a world-matrix refresh first — R3F hasn't
+  // re-flushed this tick):
+  //   start = the mesh's LIVE world matrix, including the current hover pop,
+  //   so the transition begins from exactly the size/position the card is at.
+  //   rest  = the INNER group (mesh -> popGroup -> leanGroup -> innerGroup),
+  //   the un-popped, un-leaned resting pose the drum card returns to, so the
+  //   close lands there with no jump.
+  // Shared by the click handler (fly-in) and the prev/next registry (parked).
+  const selectNow = (parked: boolean) => {
+    const mesh = meshRef.current;
+    if (!mesh || !texture) return;
+    const innerGroup = mesh.parent?.parent?.parent ?? mesh;
+    mesh.updateWorldMatrix(true, false);
+    const startPos = new THREE.Vector3();
+    const startQuat = new THREE.Quaternion();
+    const startScale = new THREE.Vector3();
+    mesh.matrixWorld.decompose(startPos, startQuat, startScale);
+    const restPos = new THREE.Vector3();
+    const restQuat = new THREE.Quaternion();
+    const restScale = new THREE.Vector3();
+    innerGroup.matrixWorld.decompose(restPos, restQuat, restScale);
+    // Clear hover here: once selected, the mesh unmounts and its
+    // onPointerOut never fires, so `hovered` would stay stuck true and the
+    // card would re-appear coloured after the panel closes.
+    setHovered(false);
+    onSelect({ item, startPos, startQuat, startScale, restPos, restQuat, restScale, startTexture: texture, startAspect: ar, parked });
+  };
+
+  // Keep the registry pointing at the latest closure (texture/aspect update
+  // as they load). No dep list on purpose — a ref write per render is cheap.
+  const selectNowRef = useRef(selectNow);
+  useEffect(() => {
+    selectNowRef.current = selectNow;
+  });
+  useEffect(() => {
+    if (!registry?.current) return;
+    const reg = registry.current;
+    reg.set(item.uid, () => selectNowRef.current(true));
+    return () => { reg.delete(item.uid); };
+  }, [registry, item.uid]);
+
   // The selected card is rendered separately as the focused card, so hide
   // its in-drum copy to avoid a doubled image.
   if (!texture || selected) return null;
@@ -414,6 +467,7 @@ function ImageCard({
         {/* Pop group: scales + lifts the card toward the camera on hover. */}
         <group ref={popRef}>
           <mesh
+            ref={meshRef}
             geometry={geometry}
             // Hovered card draws last so, as it pops toward the camera, it
             // isn't clipped by neighbours that were drawn after it (with the
@@ -425,31 +479,7 @@ function ImageCard({
             onPointerOut={(e) => { e.stopPropagation(); setHovered(false); }}
             onClick={(e) => {
               e.stopPropagation();
-              // Capture two poses (force a world-matrix refresh first — R3F
-              // hasn't re-flushed this tick):
-              //   start = the mesh's LIVE world matrix, including the current
-              //   hover pop, so the transition begins from exactly the size /
-              //   position the card is at when clicked (even mid-hover).
-              //   rest  = the INNER group (mesh -> popGroup -> leanGroup ->
-              //   innerGroup), the un-popped, un-leaned resting pose the drum
-              //   card returns to (the lean decays to 0 while the drum is
-              //   frozen), so the close lands there with no jump.
-              const mesh = e.eventObject;
-              const innerGroup = mesh.parent?.parent?.parent ?? mesh;
-              mesh.updateWorldMatrix(true, false);
-              const startPos = new THREE.Vector3();
-              const startQuat = new THREE.Quaternion();
-              const startScale = new THREE.Vector3();
-              mesh.matrixWorld.decompose(startPos, startQuat, startScale);
-              const restPos = new THREE.Vector3();
-              const restQuat = new THREE.Quaternion();
-              const restScale = new THREE.Vector3();
-              innerGroup.matrixWorld.decompose(restPos, restQuat, restScale);
-              // Clear hover here: once selected, the mesh unmounts and its
-              // onPointerOut never fires, so `hovered` would stay stuck true
-              // and the card would re-appear coloured after the panel closes.
-              setHovered(false);
-              onSelect({ item, startPos, startQuat, startScale, restPos, restQuat, restScale, startTexture: texture, startAspect: ar });
+              selectNow(false);
             }}
           >
             <shaderMaterial
@@ -502,10 +532,16 @@ function FocusedCard({
   // copy streams in. Swap to the sharper texture once it arrives, and again
   // whenever the panel's photo strip steps to a different photo.
   const [texture, setTexture] = useState<THREE.Texture>(startTexture);
-  const [aspect] = useState<number>(startAspect); // shape is fixed at click; hi-res swap keeps same aspect
+  // Aspect starts at the clicked card's ratio (so the fly-in matches the drum
+  // card), but must UPDATE when the photo strip steps to a different photo —
+  // a portrait sibling was being stretched into the first photo's landscape
+  // geometry otherwise.
+  const [aspect, setAspect] = useState<number>(startAspect);
   const meshRef = useRef<THREE.Mesh>(null);
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const p = useRef(0);       // raw progress 0..1 (eased below)
+  // Parked selections (prev/next navigation) start fully open — a direct
+  // swap in place rather than replaying the fly-in from the ring.
+  const p = useRef(sel.parked ? 1 : 0); // raw progress 0..1 (eased below)
   const exited = useRef(false);
 
   useEffect(() => {
@@ -520,6 +556,12 @@ function FocusedCard({
       tex.generateMipmaps = false;
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
+      // Re-measure the real aspect of whichever photo this is, so the geometry
+      // (below) reshapes for portrait vs landscape siblings.
+      const img = tex.image as HTMLImageElement | undefined;
+      if (img?.naturalWidth && img?.naturalHeight) {
+        setAspect(img.naturalWidth / img.naturalHeight);
+      }
       setTexture(tex);
     });
     return () => { cancelled = true; };
@@ -533,9 +575,10 @@ function FocusedCard({
   const width = ar >= 1 ? CARD_MAX_LANDSCAPE : CARD_MAX * ar;
   const height = ar >= 1 ? CARD_MAX_LANDSCAPE / ar : CARD_MAX;
   const geometry = useMemo(() => getMorphGeometry(width, height), [width, height]);
-  // Keep the same uniforms object across the texture swap and just point its
-  // `map` at whichever texture is current (updated in useFrame), so the
-  // material never re-creates — which would flash — mid-animation.
+  // Keep the same uniforms object for the material's whole life — the `map`
+  // and `aspect` values are pushed imperatively in useFrame instead, so the
+  // material never re-creates (which would flash) when the photo or its
+  // orientation changes mid-focus.
   const uniforms = useMemo(
     () => ({
       map: { value: startTexture },
@@ -545,7 +588,8 @@ function FocusedCard({
       aspect: { value: width / height },
       radius: { value: CARD_CORNER_RADIUS },
     }),
-    [startTexture, width, height]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [startTexture]
   );
 
   // Parked target: fit inside the hero box keeping aspect, expressed as a
@@ -607,6 +651,7 @@ function FocusedCard({
     if (matRef.current) {
       matRef.current.uniforms.flatten.value = e;         // curved -> flat
       matRef.current.uniforms.map.value = texture;       // low-res -> hi-res swap, no re-create
+      matRef.current.uniforms.aspect.value = width / height; // keeps corner SDF round when a portrait/landscape sibling loads
       // Full colour while opening / focused. On close, hold the colour while
       // the card is still large and only drain it over the back half of the
       // return — so it reads as "big + colour, THEN shrinks to small + b&w"
@@ -745,6 +790,7 @@ function Drum({
   selectedUid,
   lastPhotoByUid,
   velocityRef,
+  registry,
   onSelect,
 }: {
   items: PlacedImage[];
@@ -752,6 +798,7 @@ function Drum({
   selectedUid: string | null;
   lastPhotoByUid: Record<string, string>;
   velocityRef: React.RefObject<number>; // smoothed 0..1 scroll speed, read by the post pass
+  registry: SelectRegistry;             // uid -> programmatic select, for prev/next navigation
   onSelect: (sel: Selection) => void;
 }) {
   const spinRef = useRef<THREE.Group>(null);   // scroll rotation + vertical drift + idle auto-spin
@@ -919,6 +966,9 @@ function Drum({
               // one delay and assemble as a single card.
               entranceDelay={hash(i * 7.31) * ENTRANCE_STAGGER}
               leanRef={leanRef}
+              // Only the canonical (bandOffset 0) copy registers for
+              // programmatic prev/next — the wrap copies share its uid.
+              registry={bandOffset === 0 ? registry : null}
               onSelect={onSelect}
             />
           ))
@@ -1215,16 +1265,34 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 // rows, map link, close pill), dark themed to match the gallery.
 // Slides out when `closing` so the whole focus view exits in sync with the
 // hero flying back into the ring.
+// Shared circular icon button for the panel header (prev/next/close).
+const detailPanelButton: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 38,
+  height: 38,
+  padding: 0,
+  borderRadius: "50%",
+  background: "transparent",
+  border: "1px solid rgba(255,255,255,0.2)",
+  color: "rgba(255,255,255,0.85)",
+  cursor: "pointer",
+  outline: "none",
+};
+
 function DetailPanel({
   box,
   closing,
   onClose,
+  onNavigate,
   photoIndex,
   onSelectPhoto,
 }: {
   box: Box;
   closing: boolean;
   onClose: () => void;
+  onNavigate: (dir: -1 | 1) => void;
   photoIndex: number;
   onSelectPhoto: (i: number) => void;
 }) {
@@ -1282,20 +1350,19 @@ function DetailPanel({
         transition: `transform ${closing ? FOCUS_CLOSE_DURATION : FOCUS_DURATION}s cubic-bezier(0.22,1,0.36,1)`,
       }}
     >
-      {/* Top bar: close pill on the right (mirrors the gallery panel header). */}
-      <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            display: "flex", alignItems: "center", justifyContent: "center",
-            width: 38, height: 38, padding: 0, borderRadius: "50%",
-            background: "transparent",
-            border: "1px solid rgba(255,255,255,0.2)",
-            color: "rgba(255,255,255,0.85)",
-            cursor: "pointer", outline: "none",
-          }}
-        >
+      {/* Top bar: prev / next / close (mirrors the index panel header). */}
+      <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8, padding: "16px 20px", flexShrink: 0 }}>
+        <button onClick={() => onNavigate(-1)} aria-label="Previous box" style={detailPanelButton}>
+          <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+            <path d="M6.5 1L2.5 5L6.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button onClick={() => onNavigate(1)} aria-label="Next box" style={detailPanelButton}>
+          <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+            <path d="M3.5 1L7.5 5L3.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <button onClick={onClose} aria-label="Close" style={detailPanelButton}>
           <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
             <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
@@ -1485,14 +1552,34 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
     }
   };
 
-  // Close on Escape, like any lightbox.
+  // Programmatic card selection for prev/next — each canonical drum card
+  // registers itself here (uid -> capture-poses-and-open, like a click).
+  const selectRegistry = useRef(new Map<string, () => void>());
+
+  // Step to the adjacent BOX (in the same order as the index list), wrapping
+  // at the ends. The drum tiles boxes multiple times, so pick the first
+  // placed card showing the target box.
+  const navigate = (dir: -1 | 1) => {
+    if (!selected || closing) return;
+    const idx = boxes.findIndex((b) => b.id === selected.item.box.id);
+    if (idx === -1 || boxes.length < 2) return;
+    const nextBox = boxes[(idx + dir + boxes.length) % boxes.length];
+    const target = items.find((it) => it.box.id === nextBox.id);
+    if (target) selectRegistry.current.get(target.uid)?.();
+  };
+
+  // Escape closes (like any lightbox); arrows page through boxes.
   useEffect(() => {
     if (!selected) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") requestClose(); }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") requestClose();
+      if (e.key === "ArrowLeft") navigate(-1);
+      if (e.key === "ArrowRight") navigate(1);
+    }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
+  }, [selected, closing]);
 
   return (
     <div style={{ width: "100%", height: "100%", background: BG_COLOR }}>
@@ -1511,11 +1598,14 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
             selectedUid={selected?.item.uid ?? null}
             lastPhotoByUid={lastPhotoByUid}
             velocityRef={scrollVelocity}
+            registry={selectRegistry}
             onSelect={open}
           />
           {selected && <Dimmer closing={closing} target={DIM_OPACITY} onClose={requestClose} />}
           {selected && (
-            <FocusedCard sel={selected} closing={closing} photoSrc={photoSrc} onExited={finishClose} />
+            // Keyed per card so prev/next remounts the hero for the new box
+            // (parked selections render directly in place, no fly-in).
+            <FocusedCard key={selected.item.uid} sel={selected} closing={closing} photoSrc={photoSrc} onExited={finishClose} />
           )}
         </FisheyePost>
       </Canvas>
@@ -1525,6 +1615,7 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
           box={selected.item.box}
           closing={closing}
           onClose={requestClose}
+          onNavigate={navigate}
           photoIndex={photoIndex}
           onSelectPhoto={selectPhoto}
         />
