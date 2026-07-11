@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { useTheme } from "@/app/components/theme-context";
 
 // A cool light↔dark transition. It fires whenever the *rendered* theme flips
@@ -13,16 +13,19 @@ import { useTheme } from "@/app/components/theme-context";
 // flooding to black (into the dark gallery) or to white (back out).
 export function RouteTransition() {
   const { dark } = useTheme();
+  // Sits outside AppShell's MotionConfig, so reduced motion is handled
+  // here directly: the theme still flips, just without the iris wipe.
+  const reduce = useReducedMotion();
   const prevDark = useRef(dark);
   const [wipe, setWipe] = useState<null | { color: string; id: number }>(null);
   const idRef = useRef(0);
 
   useEffect(() => {
-    if (dark !== prevDark.current) {
+    if (dark !== prevDark.current && !reduce) {
       setWipe({ color: dark ? "#000000" : "#FFFFFF", id: ++idRef.current });
     }
     prevDark.current = dark;
-  }, [dark]);
+  }, [dark, reduce]);
 
   if (!wipe) return null;
 

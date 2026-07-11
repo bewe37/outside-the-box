@@ -56,7 +56,8 @@ function NavText({
     color: dark ? "#FFFFFF" : "#101010",
     opacity: active === false ? 0.45 : 1,
     cursor: href || onClick ? "pointer" : "default",
-    transition: "opacity 0.12s ease",
+    // 0.15s ease — the sitewide micro-interaction standard.
+    transition: "opacity 0.15s ease",
   };
 
   if (as === "link" && href) {

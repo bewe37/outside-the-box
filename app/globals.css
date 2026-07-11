@@ -264,4 +264,20 @@ input[type="range"].col-slider::-moz-range-thumb {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+
+  /* Title/caption rise to the top row, aligned with the close button —
+     the close bar leaves the flow and pins top-right, the body starts at
+     the panel top, and the title block clears the button's footprint. */
+  .detail-close-bar {
+    position: absolute !important;
+    top: 14px;
+    right: 14px;
+    padding: 0 !important;
+  }
+  .detail-body {
+    padding-top: 20px !important;
+  }
+  .detail-title-block {
+    padding-right: 60px;
+  }
 }

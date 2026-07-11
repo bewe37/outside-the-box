@@ -1283,7 +1283,7 @@ function DetailPanel({
       }}
     >
       {/* Top bar: close pill on the right (mirrors the gallery panel header). */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
+      <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
         <button
           onClick={onClose}
           aria-label="Close"
@@ -1302,9 +1302,9 @@ function DetailPanel({
         </button>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
+      <div className="detail-body" style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
         {/* Caption + title */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        <div className="detail-title-block" style={{ display: "flex", flexDirection: "column" }}>
           <span
             style={{
               fontSize: 11, lineHeight: leading.caption,

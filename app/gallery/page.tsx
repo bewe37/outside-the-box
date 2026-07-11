@@ -177,7 +177,7 @@ export default function GalleryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
               // Fixed full-viewport, breaking out of page-shell's padded flex
               // layout. Nav pills float on top (z 40).
               style={{ position: "fixed", inset: 0, overflow: "hidden", background: BG_COLOR, zIndex: 30 }}
@@ -190,7 +190,7 @@ export default function GalleryPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
               style={{ display: "flex", flex: 1, overflow: "hidden" }}
             >
               <IndexView
@@ -562,9 +562,11 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
     formatAddress(box.address) + ", Toronto, Ontario"
   )}`;
 
-  // Movement/morph on screen → ease-in-out; backdrop fade paired at the same
-  // timing. The hero's own position/size morph is Motion's layout spring.
-  const EASE = [0.65, 0.05, 0.36, 1] as const;
+  // House ease-out — entering elements accelerate in and settle. Matches the
+  // cylinder panel's slide so both detail panels feel identical. Backdrop and
+  // panel share the same curve AND duration (they move as one unit); the
+  // hero's own position/size morph is Motion's layout spring.
+  const EASE = [0.22, 1, 0.36, 1] as const;
 
   return (
     <>
@@ -573,7 +575,7 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.3, ease: EASE }}
+        transition={{ duration: 0.4, ease: EASE }}
         onClick={onClose}
         className="detail-backdrop"
         style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }}
@@ -661,7 +663,7 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
         }}
       >
         {/* Close */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
+        <div className="detail-close-bar" style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
           <button
             onClick={onClose}
             aria-label="Close"
@@ -673,9 +675,9 @@ function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClos
           </button>
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
+        <div className="detail-body" style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
           {/* Caption + title */}
-          <div style={{ display: "flex", flexDirection: "column" }}>
+          <div className="detail-title-block" style={{ display: "flex", flexDirection: "column" }}>
             <span style={{ fontSize: 11, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>
               ({String(box.id).padStart(3, "0")}) {formatNeighbourhood(box.neighbourhood)}
             </span>
