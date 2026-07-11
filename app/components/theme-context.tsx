@@ -1,7 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { usePathname } from "next/navigation";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
 // Whether the CURRENT page is rendering its dark (cylinder-gallery) view.
 // Pages opt in by calling useSetDarkTheme(true) while their dark view is
@@ -14,25 +13,21 @@ const ThemeContext = createContext<ThemeCtx>({ dark: false, setDark: () => {} })
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false);
-  // What consumers actually see. Navigating between two dark pages flips the
-  // raw value true→false→true within milliseconds (the old page's cleanup +
-  // the pathname reset below, then the new page re-asserting) — if consumers
-  // saw that transient, the nav text, body background and route wipe all
-  // flashed light for a beat on every navigation. The raw value has to hold
-  // for 80ms before it's exposed, so flip-flops never reach the UI.
+  // What consumers actually see. Navigating between two dark pages can flip
+  // the raw value true→false→true (the old page's unmount cleanup, then the
+  // new page re-asserting) — if consumers saw that transient, the nav text,
+  // body background and route wipe would all flash light for a beat. The raw
+  // value has to hold for 80ms before it's exposed, so flip-flops never
+  // reach the UI.
   const [settledDark, setSettledDark] = useState(false);
-  const pathname = usePathname();
-  const firstRun = useRef(true);
 
-  // Reset to light when the route CHANGES; the destination page re-asserts
-  // dark if it needs to. Skip the initial mount, though — otherwise this
-  // parent effect runs AFTER the child page's useSetDarkTheme(true) effect
-  // (React fires child effects before parent effects), clobbering the dark
-  // flag back to false on first load.
-  useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return; }
-    setDark(false);
-  }, [pathname]);
+  // NOTE: there is deliberately NO reset-on-pathname effect here. Parent
+  // effects run AFTER child effects, so a route-change reset fires after the
+  // destination page's useSetDarkTheme(true) and clobbers it back to light —
+  // that painted the nav white/dark-on-dark on every navigation. The reset
+  // is already handled correctly by useSetDarkTheme's own cleanup: the old
+  // page unmounting sets false, the new page mounting sets its own value,
+  // both batched within the same commit.
 
   useEffect(() => {
     if (dark === settledDark) return;
