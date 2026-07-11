@@ -34,6 +34,7 @@ const STROKES = buildStrokes();
 export default function LoadingAnimation({ onDone }: { onDone?: () => void }) {
   const [scope, animate] = useAnimate();
   const lineRefs = useRef<(SVGLineElement | null)[]>([]);
+  const markRef = useRef<HTMLDivElement>(null);
   const hasRun = useRef(false);
 
   useEffect(() => {
@@ -69,10 +70,15 @@ export default function LoadingAnimation({ onDone }: { onDone?: () => void }) {
           if (index + 1 < N_STROKES) {
             setTimeout(() => animateStroke(index + 1), STAGGER_MS);
           } else {
-            // All done — fade out
+            // All done — the white panel lifts up off-screen (a curtain
+            // rising) while the mark shrinks and fades slightly as it goes,
+            // instead of a flat cross-fade to the page underneath.
             setTimeout(async () => {
               if (!cancelled) {
-                await animate(scope.current, { opacity: 0 }, { duration: 0.3, ease: "easeOut" });
+                await Promise.all([
+                  animate(scope.current, { y: "-100%" }, { duration: 0.7, ease: [0.76, 0, 0.24, 1] }),
+                  animate(markRef.current, { scale: 0.85, opacity: 0 }, { duration: 0.5, ease: "easeIn" }),
+                ]);
                 onDone?.();
               }
             }, 180);
@@ -100,12 +106,13 @@ export default function LoadingAnimation({ onDone }: { onDone?: () => void }) {
         zIndex: 100,
         background: "#FFFFFF",
         display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
+        alignItems: "flex-end",
+        justifyContent: "flex-end",
+        padding: 32,
         pointerEvents: "none",
       }}
     >
-      <div style={{ position: "relative", width: 120, height: 170 }}>
+      <div ref={markRef} style={{ position: "relative", width: 70, height: 100 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/BeforeLoading.svg"

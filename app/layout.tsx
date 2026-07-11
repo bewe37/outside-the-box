@@ -30,9 +30,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
           <NavProvider>
             <AppShell>
-              {/* Reserve the fixed nav's height so page scroll containers start
-                  below it — keeps the scrollbar from being clipped by the nav. */}
-              <div className="page-shell" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", paddingTop: 44 }}>
+              {/* Reserve the top bar's height (14px padding + ~14px text + 14px). */}
+              <div className="page-shell" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", paddingTop: 42 }}>
                 {children}
               </div>
             </AppShell>

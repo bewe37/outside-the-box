@@ -27,6 +27,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setDark(false);
   }, [pathname]);
 
+  // Body's own background shows through the strip behind the floating nav
+  // (which is transparent) on pages shorter than the viewport — keep it in
+  // sync with the active page's theme so that strip isn't always white.
+  useEffect(() => {
+    document.body.style.background = dark ? "#000000" : "";
+  }, [dark]);
+
   return (
     <ThemeContext.Provider value={{ dark, setDark }}>
       {children}

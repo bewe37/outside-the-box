@@ -9,7 +9,7 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
+html, body { height: 100%; overflow-x: hidden; }
 
 body {
   background: var(--bg);
@@ -65,30 +65,16 @@ input[type="range"].col-slider::-moz-range-thumb {
 }
 .close-btn:hover { color: #202020; }
 
-/* Nav page links — centered on desktop, right-aligned on mobile */
-.nav-page-links {
-  display: flex;
-  gap: 8px;
+/* Simple text nav — links dim slightly on hover. No focus rings on click,
+   only for keyboard nav (:focus-visible). Hover gated to fine pointers so
+   taps don't leave links stuck in their hover state. */
+/* !important needed: opacity is also set inline (React style) for the
+   active/inactive state, which otherwise always wins over this rule. */
+@media (hover: hover) and (pointer: fine) {
+  .simple-nav .nav-text:hover { opacity: 1 !important; }
 }
-.nav-page-links a {
-  transition: color 0.15s ease;
-}
-/* Hover colour is driven by the inline React styles (theme-aware: white on
-   dark pages, #202020 on light) — a blanket !important hover rule here used
-   to force every link dark even on the dark gallery pages. */
-
-.nav-right-slot {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  translate: -50% -50%;
-}
-@media (max-width: 640px) {
-  .nav-right-slot {
-    position: static !important;
-    translate: none !important;
-  }
-}
+.simple-nav .nav-text:focus:not(:focus-visible) { outline: none; }
+.simple-nav .nav-text:focus-visible { outline: 1px solid rgba(255,255,255,0.4); outline-offset: 4px; }
 
 /* Nav links */
 .nav-link {
@@ -127,10 +113,56 @@ input[type="range"].col-slider::-moz-range-thumb {
   opacity: 1;
 }
 
-/* Index row — hover highlight handled by a shared sliding motion bar */
+/* Photo grid (list view) — column layout is set inline; this just handles
+   the image zoom on hover. */
+.photo-grid-img {
+  filter: saturate(1.05);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.photo-grid-card:hover .photo-grid-img {
+  transform: scale(1.03);
+}
+
+/* Index list rows — hovering inverts the row: a white bar sweeps in from
+   the left (transform-only ::before), text flips to black, and the content
+   nudges right. */
 .index-row {
   position: relative;
+  color: #FFFFFF;
+  transition: color 0.3s ease;
+}
+.index-row::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: #FFFFFF;
+  transform: scaleY(0);
+  transform-origin: center top;
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+  z-index: 0;
+}
+/* Hover inversion is mouse-only — on touch, taps would leave the last row
+   stuck inverted. */
+@media (hover: hover) and (pointer: fine) {
+  .index-row:hover::before {
+    transform: scaleY(1);
+  }
+  .index-row:hover {
+    color: #0A0A0A;
+  }
+}
+/* Text rides above the sweep bar (explicit layering — no reliance on the
+   row forming its own stacking context). No transform on hover — the text
+   stays perfectly still while the bar fills behind it. */
+.index-row > span {
+  position: relative;
   z-index: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .index-row,
+  .index-row::before {
+    transition: none;
+  }
 }
 
 /* Lightbox nav arrows */
@@ -171,23 +203,24 @@ input[type="range"].col-slider::-moz-range-thumb {
 
 /* ─── Mobile ──────────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Nav */
-  .nav-page-links { display: flex !important; }
-  .site-nav { padding-inline: 16px !important; height: 40px !important; }
-  .nav-right-slot { display: none !important; }
+  /* Simple nav — wordmark on the left; Gallery/Information/Contact grouped
+     together on the right (the wordmark's auto margin pushes everything
+     after it across; Contact's own inline auto margin is zeroed so it
+     joins the group instead of pinning separately). */
+  .simple-nav { padding: 14px 16px !important; gap: 14px !important; }
+  .nav-wordmark { margin-right: auto; }
+  .nav-tabs { gap: 14px !important; }
+  .nav-pair { gap: 8px !important; }
+  .nav-contact { margin-left: 0 !important; }
+
+  /* The Index (list) view is desktop-only. */
+  .nav-index-tab { display: none; }
 
   /* Collect button — always visible on mobile (no hover state) */
   .collect-btn-wrap {
     opacity: 1 !important;
     transform: scale(1) !important;
   }
-
-  /* Index view */
-  .index-col { display: none !important; }
-  .index-row-btn { width: 100% !important; }
-  .index-row-inner { width: 100% !important; justify-content: space-between !important; align-items: center !important; }
-  .index-thumb { display: block !important; }
-  .index-date { display: block !important; }
 
   /* Mobile nav is 48px — reserve that space */
   .page-shell { padding-top: 40px !important; }
@@ -196,28 +229,6 @@ input[type="range"].col-slider::-moz-range-thumb {
   .masonry-grid { column-count: 2 !important; column-gap: 12px !important; }
   .masonry-card { margin-bottom: 12px !important; }
   .photos-scroll { padding: 16px !important; padding-top: 8px !important; }
-  .index-scroll { padding-top: 8px !important; padding-inline: 16px !important; }
-
-  /* About page — stack sections normally, no indent */
-  .about-sections {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    translate: none !important;
-    width: 100% !important;
-    padding: 64px 20px 80px !important;
-    box-sizing: border-box !important;
-    overflow-y: auto !important;
-    max-height: 100% !important;
-  }
-  .about-sections > div {
-    margin-left: 0 !important;
-  }
-
-  /* About title — hide on mobile since sections are in flow */
-  .about-title { display: none !important; }
-  .about-credit { position: fixed !important; right: auto !important; left: 20px !important; bottom: 20px !important; }
 
   /* Lightbox — true full screen on mobile */
   .lightbox-modal {
@@ -228,5 +239,29 @@ input[type="range"].col-slider::-moz-range-thumb {
     translate: none !important;
     width: 100% !important;
     height: 100dvh !important;
+  }
+
+  /* Detail overlay — phones get a stacked layout: hero photo in the top
+     half, panel as a bottom sheet. Backdrop blurs are dropped (expensive
+     on mobile GPUs) in favour of a more opaque solid. */
+  .detail-backdrop {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .detail-hero-wrap {
+    align-items: flex-start !important;
+    padding: 64px 16px 0 !important;
+  }
+  .detail-hero {
+    /* Height-capped, aspect preserved via the CSS var the hero sets. */
+    width: min(calc(100vw - 32px), calc(36dvh * var(--hero-aspect, 1.33))) !important;
+  }
+  .grid-detail-panel {
+    top: auto !important;
+    max-height: 52dvh;
+    width: calc(100% - 32px) !important;
+    background: rgba(10, 10, 10, 0.94) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
 }

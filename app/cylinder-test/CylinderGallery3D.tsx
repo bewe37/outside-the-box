@@ -5,9 +5,13 @@ import { createPortal as createDomPortal } from "react-dom";
 import { Canvas, useFrame, useThree, createPortal } from "@react-three/fiber";
 import * as THREE from "three";
 import Image from "next/image";
-import { motion } from "motion/react";
 import { type Box, formatNeighbourhood, formatYear, formatAddress } from "@/lib/data";
-import { size, tracking, leading } from "@/lib/typography";
+import { tracking, leading } from "@/lib/typography";
+import { useHideNav } from "@/app/components/nav-context";
+
+// The whole gallery (canvas background, vignette fade, grid overlay, detail
+// panel) is dark-themed — pure black, matching the void the drum floats in.
+const BG_COLOR = "#000000";
 
 // ─── Layout knobs ──────────────────────────────────────────────────────────
 // The drum is organized into discrete horizontal ROWS, each with a FIXED
@@ -19,7 +23,7 @@ const CARDS_PER_ROW = 6;
 const ROW_SPACING = 3.4;               // vertical distance between row centres
 const ROW_ANGLE_OFFSET = Math.PI / CARDS_PER_ROW; // alternate rows stagger by half a slot
 const CARD_MAX = 2.65;                 // longest edge of a card, world units — slightly smaller for a bit more breathing room between cards
-const CARD_MAX_LANDSCAPE = 2.9;        // landscape cards read a bit small against portraits at the same longest-edge cap — give them a slightly larger one
+const CARD_MAX_LANDSCAPE = 3.3;        // landscape cards read small against portraits at the same longest-edge cap (a wide photo is shorter), so give them a bigger one
 const JITTER_SEED_SCALE = 0.035;       // extra per-card rotation jitter, radians
 
 const SCROLL_TO_RADIANS = 0.0016;      // scroll px -> rotation radians
@@ -41,11 +45,13 @@ const PARALLAX_HALF_LIFE = 0.15;       // seconds for the parallax offset to set
 
 const FISHEYE_STRENGTH = 0.06;         // how much the top/bottom bend inward — 0 = off
 
+const CAMERA_FOV = 85;                 // vertical fov, degrees — shared by the Canvas and the px<->world math below
+
 // Focused (clicked) card — a flat hero image parked in front of the camera,
 // pushed left so the detail panel fits on the right half of the screen.
 const FOCUS_X = -1.6;                  // horizontal offset of the hero image, world units (negative = left)
 const FOCUS_Z = -3.2;                  // distance in front of the camera the hero sits, world units
-const FOCUS_MAX_W = 3.6;               // max hero width, world units (fit keeps aspect within this box)
+const FOCUS_MAX_W = 4.5;               // max hero width, world units (fit keeps aspect within this box) — wide enough that landscape heroes aren't dwarfed by portrait ones
 const FOCUS_MAX_H = 4.4;               // max hero height, world units
 const FOCUS_HALF_LIFE = 0.14;          // seconds for the dimmer fade
 const FOCUS_DURATION = 0.62;           // seconds for the hero fly-in (eased)
@@ -169,6 +175,8 @@ const FOCUS_FRAGMENT = /* glsl */ `
   uniform sampler2D map;
   uniform float opacity;
   uniform float saturation; // 1 = full colour (focused), 0 = b&w (matches drum)
+  uniform float aspect;     // card width / height, so the corner radius stays round
+  uniform float radius;     // corner radius in units of the card's HALF-HEIGHT
   varying vec2 vUv;
   vec3 sRGBToLinear(vec3 c) {
     return mix(c * 0.0773993808, pow(c * 0.9478672986 + 0.0521327014, vec3(2.4)), step(0.04045, c));
@@ -176,12 +184,23 @@ const FOCUS_FRAGMENT = /* glsl */ `
   vec3 linearToSRGB(vec3 c) {
     return mix(pow(c, vec3(0.41666)) * 1.055 - 0.055, c * 12.92, step(c, vec3(0.0031308)));
   }
+  // Same rounded-rect clip the drum cards use, so the corners stay rounded
+  // as a card flies out of the ring and becomes the focused hero.
+  float roundedRectAlpha(vec2 uv, float ar, float r) {
+    vec2 ext = vec2(ar, 1.0);
+    r = min(r, min(ext.x, ext.y));
+    vec2 p = (uv - 0.5) * 2.0 * ext;
+    vec2 d = abs(p) - (ext - r);
+    float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+    return 1.0 - smoothstep(-fwidth(dist), fwidth(dist), dist);
+  }
   void main() {
     vec4 tex = texture2D(map, vUv);
     vec3 lin = sRGBToLinear(tex.rgb);
     float gray = dot(lin, vec3(0.299, 0.587, 0.114));
     vec3 mixed = mix(vec3(gray), lin, saturation);
-    gl_FragColor = vec4(linearToSRGB(mixed), tex.a * opacity);
+    float corner = roundedRectAlpha(vUv, aspect, radius);
+    gl_FragColor = vec4(linearToSRGB(mixed), tex.a * opacity * corner);
   }
 `;
 
@@ -198,9 +217,25 @@ const GRAYSCALE_VERTEX = /* glsl */ `
 `;
 const GRAYSCALE_FRAGMENT = /* glsl */ `
   uniform sampler2D map;
-  uniform float reveal; // 0 = fully b&w, 1 = fully colour — animates the wipe
-  uniform float time;   // seconds, for the subtle living shimmer on the edge
+  uniform float reveal;   // 0 = fully b&w, 1 = fully colour — animates the wipe
+  uniform float time;     // seconds, for the subtle living shimmer on the edge
+  uniform float entrance; // 0..1 fade-in alpha for the load-time assembly
+  uniform float aspect;   // card width / height, so the corner radius stays round
+  uniform float radius;   // corner radius in units of the card's HALF-HEIGHT
   varying vec2 vUv;
+
+  // Signed distance to a rounded rectangle — used to clip the card's corners
+  // so the textured plane reads as a rounded photo, not a hard rectangle.
+  float roundedRectAlpha(vec2 uv, float ar, float r) {
+    // Work in a space where 1 unit = half the card height; x scaled by aspect.
+    vec2 ext = vec2(ar, 1.0);          // half-extents of the card in this space
+    r = min(r, min(ext.x, ext.y));      // never larger than the shorter half-edge
+    vec2 p = (uv - 0.5) * 2.0 * ext;
+    vec2 d = abs(p) - (ext - r);
+    float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+    // Anti-alias the edge with one screen pixel of feather.
+    return 1.0 - smoothstep(-fwidth(dist), fwidth(dist), dist);
+  }
 
   // Raw ShaderMaterial never gets Three's automatic sRGB texture decode
   // that meshBasicMaterial applies for you — sample manually here, once,
@@ -235,9 +270,15 @@ const GRAYSCALE_FRAGMENT = /* glsl */ `
     float sweeping = reveal * (1.0 - reveal) * 4.0; // peaks mid-animation, 0 at rest
     mixed += band * sweeping * 0.6;
 
-    gl_FragColor = vec4(linearToSRGB(mixed), tex.a);
+    float corner = roundedRectAlpha(vUv, aspect, radius);
+    gl_FragColor = vec4(linearToSRGB(mixed), tex.a * entrance * corner);
   }
 `;
+
+// Corner radius as a fraction of each card's half-height. Kept in
+// height-relative units so portrait and landscape cards round identically.
+// Small — reads as ~4px, matching the index preview / detail hero corners.
+const CARD_CORNER_RADIUS = 0.02;
 
 const TEXTURE_WIDTH = 640; // requested px width — cards are small on screen, originals can be 2000px+
 
@@ -254,10 +295,14 @@ function optimizedSrc(src: string) {
 function ImageCard({
   item,
   selected,
+  entranceDelay,
+  leanRef,
   onSelect,
 }: {
   item: PlacedImage;
   selected: boolean;
+  entranceDelay: number;                 // seconds before this card's load-time fade-in starts
+  leanRef: React.RefObject<number>;      // shared signed yaw (radians) — the drum's inertia lean
   onSelect: (sel: Selection) => void;
 }) {
   const [aspect, setAspect] = useState<number | null>(null);
@@ -265,9 +310,13 @@ function ImageCard({
   const [hovered, setHovered] = useState(false);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const popRef = useRef<THREE.Group>(null);   // lifts + scales the card toward the camera on hover
+  const leanGroupRef = useRef<THREE.Group>(null); // yaws with the drum's momentum
   const targetReveal = useRef(0);
   const currentReveal = useRef(0);
   const currentPop = useRef(0);
+  // Time since this card's texture became ready — drives the entrance
+  // fade/scale, offset by entranceDelay so the ring assembles staggered.
+  const entranceT = useRef(0);
 
   useEffect(() => {
     // A selected card is hidden (its focused twin is showing), and must come
@@ -286,17 +335,30 @@ function ImageCard({
   useFrame((state, delta) => {
     const smoothing = 1 - Math.pow(2, -delta / SATURATION_HALF_LIFE);
     currentReveal.current += (targetReveal.current - currentReveal.current) * smoothing;
+
+    // Entrance: clock starts once the texture is ready, each card offset by
+    // its own delay. Eased fade + grow-in; runs once, then sits at 1.
+    if (texture) entranceT.current += delta;
+    const et = THREE.MathUtils.clamp((entranceT.current - entranceDelay) / ENTRANCE_DURATION, 0, 1);
+    const entrance = 1 - Math.pow(1 - et, 3); // ease-out cubic
+
     if (materialRef.current) {
       materialRef.current.uniforms.reveal.value = currentReveal.current;
       materialRef.current.uniforms.time.value = state.clock.elapsedTime;
+      materialRef.current.uniforms.entrance.value = entrance;
     }
     // Hovered card lifts toward the camera and scales up a touch, so it
     // separates from the drum instead of staying flush in the ring.
     currentPop.current += ((hovered ? 1 : 0) - currentPop.current) * smoothing;
     if (popRef.current) {
       const s = 1 + currentPop.current * 0.12;
-      popRef.current.scale.setScalar(s);
+      const grow = ENTRANCE_FROM_SCALE + (1 - ENTRANCE_FROM_SCALE) * entrance;
+      popRef.current.scale.setScalar(s * grow);
       popRef.current.position.z = currentPop.current * 0.5; // toward centre/camera
+    }
+    // Momentum lean, shared across all cards (written by the Drum per frame).
+    if (leanGroupRef.current) {
+      leanGroupRef.current.rotation.y = leanRef.current ?? 0;
     }
   });
 
@@ -325,8 +387,15 @@ function ImageCard({
   const height = ar >= 1 ? CARD_MAX_LANDSCAPE / ar : CARD_MAX;
   const geometry = useMemo(() => getCurvedGeometry(width, height), [width, height]);
   const uniforms = useMemo(
-    () => ({ map: { value: texture }, reveal: { value: 0 }, time: { value: 0 } }),
-    [texture]
+    () => ({
+      map: { value: texture },
+      reveal: { value: 0 },
+      time: { value: 0 },
+      entrance: { value: 0 },
+      aspect: { value: width / height },
+      radius: { value: CARD_CORNER_RADIUS },
+    }),
+    [texture, width, height]
   );
 
   // The selected card is rendered separately as the focused card, so hide
@@ -340,10 +409,18 @@ function ImageCard({
           and face back toward the centre. The geometry itself bows into a
           shallow arc so each card reads as curved, not flat. */}
       <group position={[0, item.yOffset, -RADIUS]} rotation={[0, item.tilt, 0]}>
+        {/* Lean group: yaws with the drum's momentum (inertia lean). */}
+        <group ref={leanGroupRef}>
         {/* Pop group: scales + lifts the card toward the camera on hover. */}
         <group ref={popRef}>
           <mesh
             geometry={geometry}
+            // Hovered card draws last so, as it pops toward the camera, it
+            // isn't clipped by neighbours that were drawn after it (with the
+            // corner-radius alpha the cards are transparent, and same-order
+            // transparent meshes sort by draw order, not depth — a popped
+            // card would otherwise get sliced by an adjacent card's plane).
+            renderOrder={hovered ? 1 : 0}
             onPointerOver={(e) => { e.stopPropagation(); setHovered(true); }}
             onPointerOut={(e) => { e.stopPropagation(); setHovered(false); }}
             onClick={(e) => {
@@ -353,11 +430,12 @@ function ImageCard({
               //   start = the mesh's LIVE world matrix, including the current
               //   hover pop, so the transition begins from exactly the size /
               //   position the card is at when clicked (even mid-hover).
-              //   rest  = the INNER group (mesh -> popGroup -> innerGroup),
-              //   the un-popped resting pose the drum card returns to, so the
-              //   close lands there with no jump at the handoff.
+              //   rest  = the INNER group (mesh -> popGroup -> leanGroup ->
+              //   innerGroup), the un-popped, un-leaned resting pose the drum
+              //   card returns to (the lean decays to 0 while the drum is
+              //   frozen), so the close lands there with no jump.
               const mesh = e.eventObject;
-              const innerGroup = mesh.parent?.parent ?? mesh;
+              const innerGroup = mesh.parent?.parent?.parent ?? mesh;
               mesh.updateWorldMatrix(true, false);
               const startPos = new THREE.Vector3();
               const startQuat = new THREE.Quaternion();
@@ -383,6 +461,7 @@ function ImageCard({
             />
           </mesh>
         </group>
+        </group>
       </group>
     </group>
   );
@@ -406,12 +485,22 @@ const _tmpPos = new THREE.Vector3();
 const _tmpQuat = new THREE.Quaternion();
 const _identQuat = new THREE.Quaternion();
 
-function FocusedCard({ sel, closing, photoSrc, onExited }: { sel: Selection; closing: boolean; photoSrc: string; onExited: () => void }) {
-  const { item, startPos, startQuat, startScale, restPos, restQuat, restScale, startTexture, startAspect } = sel;
+function FocusedCard({
+  sel,
+  closing,
+  photoSrc,
+  onExited,
+}: {
+  sel: Selection;
+  closing: boolean;
+  photoSrc: string;
+  onExited: () => void;
+}) {
+  const { startPos, startQuat, startScale, restPos, restQuat, restScale, startTexture, startAspect } = sel;
   // Start from the drum card's already-decoded texture/aspect so the hero is
   // visible on the very first frame — no vanish-then-pop while the hi-res
   // copy streams in. Swap to the sharper texture once it arrives, and again
-  // whenever the panel's thumbnail strip switches to a different photo.
+  // whenever the panel's photo strip steps to a different photo.
   const [texture, setTexture] = useState<THREE.Texture>(startTexture);
   const [aspect] = useState<number>(startAspect); // shape is fixed at click; hi-res swap keeps same aspect
   const meshRef = useRef<THREE.Mesh>(null);
@@ -436,25 +525,46 @@ function FocusedCard({ sel, closing, photoSrc, onExited }: { sel: Selection; clo
     return () => { cancelled = true; };
   }, [photoSrc]);
 
-  // Same base geometry size as the drum card, so the pulled card is literally
-  // the same shape at t=0; the parked size is reached by scaling up.
+  // Same base geometry size as the drum card — including the landscape size
+  // bump — so the pulled card is literally the same shape at t=0 AND lands
+  // back at exactly the drum card's size on close (a mismatched base here
+  // made landscape photos visibly pop ~9% larger at the return handoff).
   const ar = aspect;
-  const width = ar >= 1 ? CARD_MAX : CARD_MAX * ar;
-  const height = ar >= 1 ? CARD_MAX / ar : CARD_MAX;
+  const width = ar >= 1 ? CARD_MAX_LANDSCAPE : CARD_MAX * ar;
+  const height = ar >= 1 ? CARD_MAX_LANDSCAPE / ar : CARD_MAX;
   const geometry = useMemo(() => getMorphGeometry(width, height), [width, height]);
   // Keep the same uniforms object across the texture swap and just point its
   // `map` at whichever texture is current (updated in useFrame), so the
   // material never re-creates — which would flash — mid-animation.
   const uniforms = useMemo(
-    () => ({ map: { value: startTexture }, flatten: { value: 0 }, opacity: { value: 1 }, saturation: { value: 1 } }),
-    [startTexture]
+    () => ({
+      map: { value: startTexture },
+      flatten: { value: 0 },
+      opacity: { value: 1 },
+      saturation: { value: 1 },
+      aspect: { value: width / height },
+      radius: { value: CARD_CORNER_RADIUS },
+    }),
+    [startTexture, width, height]
   );
 
   // Parked target: fit inside the hero box keeping aspect, expressed as a
-  // uniform scale on the base geometry.
-  const parkedFit = Math.min(FOCUS_MAX_W / (width), FOCUS_MAX_H / (height));
+  // uniform scale on the base geometry. On phones the detail panel is a
+  // bottom sheet (not a right-hand column), so the hero parks centred
+  // horizontally in the band above the sheet instead of pushed left —
+  // sized against the actual visible area at the hero's depth.
+  const { size: canvasSize } = useThree();
+  const isNarrow = canvasSize.width < 640;
+  const worldH = 2 * Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2)) * Math.abs(FOCUS_Z);
+  const worldW = worldH * (canvasSize.width / canvasSize.height);
+  const maxW = isNarrow ? worldW - 0.3 : FOCUS_MAX_W;
+  const maxH = isNarrow ? worldH * 0.34 : FOCUS_MAX_H;
+  const parkedFit = Math.min(maxW / (width), maxH / (height));
   const endScale = parkedFit;
-  const endPos = useMemo(() => new THREE.Vector3(FOCUS_X, 0, FOCUS_Z), []);
+  const endPos = useMemo(
+    () => (isNarrow ? new THREE.Vector3(0, worldH * 0.23, FOCUS_Z) : new THREE.Vector3(FOCUS_X, 0, FOCUS_Z)),
+    [isNarrow, worldH]
+  );
 
   useFrame((_, delta) => {
     // Once the close has fully played out we've asked the parent to unmount
@@ -564,6 +674,67 @@ function Dimmer({ closing, target, onClose }: { closing: boolean; target: number
   );
 }
 
+// Faint graph-paper grid on the void behind the drum. A single static plane
+// parked behind everything the camera can see (the camera never rotates —
+// only the drum does — so one plane covers the whole view). It runs through
+// the same post pipeline as the rest of the scene, so the vignette fades it
+// toward the edges and the motion smear drags it along with a fast spin;
+// the drum's parallax drifting over the still grid adds a little depth.
+const GRID_LINE_ALPHA = 0.016;  // line brightness on black — a whisper
+const GRID_FADE_DELAY = 0.4;    // seconds before the grid starts fading in
+const GRID_FADE_DURATION = 1.6; // seconds for the fade itself
+const GRID_FALLOFF_IN = 6.0;    // world units from centre where the radial fade starts
+const GRID_FALLOFF_OUT = 22.0;  // world units where the grid has fully dissolved
+const GRID_FRAGMENT = /* glsl */ `
+  uniform float fade; // 0..1 fade-in after load
+  varying vec2 vUv;
+  void main() {
+    // ~2 world-unit square cells on the 120x80 plane.
+    vec2 coord = vUv * vec2(60.0, 40.0);
+    // Anti-aliased 1px lines at every cell boundary (fwidth keeps them one
+    // screen pixel wide regardless of distance/warp).
+    vec2 grid = abs(fract(coord - 0.5) - 0.5) / fwidth(coord);
+    float line = 1.0 - min(min(grid.x, grid.y), 1.0);
+    // Radial falloff (in world units from the plane's centre): the grid
+    // only really lives in the middle of the frame and dissolves well
+    // before the screen edges — the vignette finishes the job.
+    vec2 p = (vUv - 0.5) * vec2(120.0, 80.0);
+    float fall = 1.0 - smoothstep(${GRID_FALLOFF_IN.toFixed(1)}, ${GRID_FALLOFF_OUT.toFixed(1)}, length(p));
+    gl_FragColor = vec4(vec3(line * ${GRID_LINE_ALPHA.toFixed(3)} * fade * fall), 1.0);
+  }
+`;
+
+function BackgroundGrid() {
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const uniforms = useMemo(() => ({ fade: { value: 0 } }), []);
+
+  // Ease the grid in after a short beat, so the drum assembles first and
+  // the graph paper surfaces quietly underneath it.
+  const elapsed = useRef(0);
+  useFrame((_, delta) => {
+    elapsed.current += delta;
+    const t = THREE.MathUtils.clamp((elapsed.current - GRID_FADE_DELAY) / GRID_FADE_DURATION, 0, 1);
+    if (materialRef.current) {
+      materialRef.current.uniforms.fade.value = t * t * (3 - 2 * t); // smoothstep
+    }
+  });
+
+  // No pointer handlers, so it never blocks card hovers or the
+  // click-empty-space-to-close behaviour.
+  return (
+    <mesh position={[0, 0, -24]}>
+      <planeGeometry args={[120, 80]} />
+      <shaderMaterial
+        ref={materialRef}
+        uniforms={uniforms}
+        vertexShader={GRAYSCALE_VERTEX}
+        fragmentShader={GRID_FRAGMENT}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+
 // Scroll-driven rotation + vertical drift of the whole drum, plus a passive
 // auto-spin that eases in after a moment of no scroll input, and a subtle
 // mouse-parallax tilt layered on top (cheap — just extra rotation math, no
@@ -572,13 +743,15 @@ function Drum({
   items,
   yBand,
   selectedUid,
-  selectedPhotoSrc,
+  lastPhotoByUid,
+  velocityRef,
   onSelect,
 }: {
   items: PlacedImage[];
   yBand: number;
   selectedUid: string | null;
-  selectedPhotoSrc: string | null;
+  lastPhotoByUid: Record<string, string>;
+  velocityRef: React.RefObject<number>; // smoothed 0..1 scroll speed, read by the post pass
   onSelect: (sel: Selection) => void;
 }) {
   const spinRef = useRef<THREE.Group>(null);   // scroll rotation + vertical drift + idle auto-spin
@@ -593,6 +766,12 @@ function Drum({
 
   const mouseTarget = useRef({ x: 0, y: 0 });   // -1..1, raw pointer position
   const parallaxCurrent = useRef({ x: 0, y: 0 });
+
+  // Previous frame's pose, for measuring the drum's actual speed (which
+  // drives the post pass's motion-smear streaks and the cards' inertia lean).
+  const prevRot = useRef(0);
+  const prevY = useRef(0);
+  const leanRef = useRef(0); // signed card yaw, radians — read by every ImageCard
 
   // Freeze drum input while a card is focused, so the ring holds still
   // behind the detail view. A ref keeps the listeners (registered once)
@@ -681,6 +860,23 @@ function Drum({
       spinRef.current.position.y = THREE.MathUtils.euclideanModulo(currentY.current, yBand);
     }
 
+    // Measure the drum's actual speed (rotation + vertical drift, using the
+    // UNWRAPPED y so the band-modulo jump above doesn't spike it) and smooth
+    // it into a 0..1 envelope for the post pass's motion-smear streaks.
+    const frameRot = currentRot.current + idleSpinPhase.current;
+    const dt = Math.max(delta, 1e-4);
+    const rotVel = (frameRot - prevRot.current) / dt; // signed, rad/s
+    const ySpeed = Math.abs(currentY.current - prevY.current) / dt;
+    prevRot.current = frameRot;
+    prevY.current = currentY.current;
+    const rawSpeed = Math.min(1, Math.abs(rotVel) / SMEAR_ROT_FULL + ySpeed / SMEAR_Y_FULL);
+    velocityRef.current += (rawSpeed - velocityRef.current) * (1 - Math.pow(2, -delta / SMEAR_RESPONSE));
+
+    // Inertia lean: signed, so the cards yaw INTO the direction of spin and
+    // swing back through upright as it settles.
+    const leanTarget = THREE.MathUtils.clamp(rotVel / LEAN_FULL_SPEED, -1, 1) * LEAN_MAX;
+    leanRef.current += (leanTarget - leanRef.current) * (1 - Math.pow(2, -delta / LEAN_RESPONSE));
+
     // Mouse parallax: gently settle toward the pointer's position, offset
     // as a small extra yaw/pitch on an outer wrapper so it never interferes
     // with the scroll/idle rotation state above.
@@ -699,26 +895,27 @@ function Drum({
         {/* Each card renders three times, stacked one yBand apart, so the
             vertical wrap never shows a gap or pop at the seam. */}
         {[0, yBand, -yBand].map((bandOffset) =>
-          items.map((item, i) => {
-            const isSelected = selectedUid === item.uid;
-            return (
-              <ImageCard
-                key={`${i}-${bandOffset}`}
-                item={{
-                  ...item,
-                  yOffset: item.yOffset + bandOffset,
-                  // While a card is open, the panel's photo carousel can step
-                  // through the box's other photos — carry that choice back
-                  // onto the drum card so it lands showing the same photo
-                  // that was on screen when the panel closes, not always the
-                  // box's original cover photo.
-                  src: isSelected && selectedPhotoSrc ? selectedPhotoSrc : item.src,
-                }}
-                selected={isSelected}
-                onSelect={onSelect}
-              />
-            );
-          })
+          items.map((item, i) => (
+            <ImageCard
+              key={`${i}-${bandOffset}`}
+              item={{
+                ...item,
+                yOffset: item.yOffset + bandOffset,
+                // The panel's photo carousel can step through a box's other
+                // photos while it's open — carry that choice back onto the
+                // drum card so it keeps showing the same photo after the
+                // panel closes, not always the box's original cover photo.
+                src: lastPhotoByUid[item.uid] ?? item.src,
+              }}
+              selected={selectedUid === item.uid}
+              // Hash-based stagger reads organic (not a mechanical sweep);
+              // keyed on the item index so a card's three band copies share
+              // one delay and assemble as a single card.
+              entranceDelay={hash(i * 7.31) * ENTRANCE_STAGGER}
+              leanRef={leanRef}
+              onSelect={onSelect}
+            />
+          ))
         )}
       </group>
     </group>
@@ -737,6 +934,29 @@ const EDGE_BLUR_STRENGTH = 0.0022;  // max blur-sample offset, in UV units, at t
 const EDGE_FADE_STRENGTH = 0.55;    // how much the outer ring darkens (0 = none, 1 = fades to black)
 const GRAIN_STRENGTH = 0.05;        // film-grain intensity, added over the whole frame
 
+// Motion smear for the top/bottom bands — while the drum is moving, the
+// outer rows drag into long vertical streaks pointing off the frame, like a
+// long-exposure photo of the cylinder spinning. Streak length follows the
+// drum's smoothed scroll speed, so a still drum renders perfectly clean.
+const SMEAR_START = 0.55;           // |vertical distance from centre| where the smear begins, 0..1
+const SMEAR_LEN = 0.16;             // max streak length at full speed, as a fraction of frame height
+const SMEAR_RESPONSE = 0.15;        // seconds for the streak envelope to close half its gap — eases in/out
+const SMEAR_ROT_FULL = 2.5;         // rotation speed (rad/s) that maps to full streak
+const SMEAR_Y_FULL = 8;             // vertical drift speed (world units/s) that maps to full streak
+
+// Inertia lean — cards yaw into the direction of rotation while the drum
+// spins, and spring back upright as it settles, so the ring feels dragged
+// by momentum rather than rigidly bolted together.
+const LEAN_MAX = 0.22;              // max card yaw, radians (~12.5°), at full rotation speed
+const LEAN_FULL_SPEED = 2.5;        // rotation speed (rad/s) that maps to the full lean
+const LEAN_RESPONSE = 0.18;         // seconds for the lean to close half its gap — the "spring"
+
+// Entrance build — on first load each card fades/scales into the ring on
+// its own small delay, so the drum assembles instead of popping in whole.
+const ENTRANCE_DURATION = 0.7;      // seconds for one card's fade/scale-in
+const ENTRANCE_STAGGER = 0.9;       // max extra delay across cards, seconds
+const ENTRANCE_FROM_SCALE = 0.6;    // cards grow from this scale to 1
+
 const FISHEYE_FRAGMENT = /* glsl */ `
   uniform sampler2D tDiffuse;
   uniform float strength;
@@ -744,6 +964,8 @@ const FISHEYE_FRAGMENT = /* glsl */ `
   uniform float fadeAmount;
   uniform float grain;
   uniform float time;
+  uniform float smear; // 0..1, the drum's smoothed scroll speed
+  uniform vec3 fadeColor; // page background — the vignette/edge fade mixes TOWARD this, not toward black
   varying vec2 vUv;
 
   // The render target holds linear data (nothing in this custom pass ever
@@ -780,6 +1002,14 @@ const FISHEYE_FRAGMENT = /* glsl */ `
     float edgeFade = 1.0 - smoothstep(0.0, 0.05, overshoot);
     vec2 uv = vec2(vUv.x, clamp(bentY, 0.0, 1.0));
 
+    // ── Motion smear over the top/bottom bands ──────────────────────────
+    // While the drum is moving, the outer rows drag into vertical streaks
+    // pointing off the frame — a long-exposure trail of the spin. The smear
+    // uniform is the drum's smoothed scroll speed; still drum = clean frame.
+    float vEdge = smoothstep(${SMEAR_START.toFixed(2)}, 1.0, abs(t));
+    float streak = smear * vEdge * ${SMEAR_LEN.toFixed(2)};
+    float dirY = sign(t); // drag outward, away from the centre of frame
+
     // Fade + blur toward the edges (replaces the earlier chromatic
     // aberration effect) — clean and sharp in the centre of frame, softly
     // out of focus and darkened toward the outer ring, echoing a lens
@@ -795,8 +1025,29 @@ const FISHEYE_FRAGMENT = /* glsl */ `
     blurred += texture2D(tDiffuse, clamp(uv + vec2(0.0, blurRadius), 0.0, 1.0)) * 0.15;
     blurred += texture2D(tDiffuse, clamp(uv - vec2(0.0, blurRadius), 0.0, 1.0)) * 0.15;
 
-    vec3 color = linearToSRGB(blurred.rgb) * (1.0 - edgeMask * fadeAmount);
-    color *= edgeFade;
+    // Streak accumulation: a trail of samples pulled from toward the centre
+    // of frame, weights fading along the trail — content gets dragged
+    // outward into the void while the drum is in motion. The whole trail is
+    // gated by streak length so a still drum leaves the base blur untouched
+    // (ungated, six same-spot taps would dilute it).
+    float trailOn = smoothstep(0.0, 0.02, streak);
+    float wsum = 1.0;
+    for (int i = 1; i <= 6; i++) {
+      float f = float(i) / 6.0;
+      float w = (1.0 - f * 0.85) * trailOn;
+      blurred += texture2D(tDiffuse, clamp(uv - vec2(0.0, dirY * f * streak), 0.0, 1.0)) * w;
+      wsum += w;
+    }
+    blurred /= wsum;
+
+    // Vignette + edge overshoot both fade TOWARD the page background colour
+    // via mix() (fadeColor is black in the current dark theme, so this reads
+    // the same as fading to black — but keeping it as a uniform, rather than
+    // a hardcoded multiply, means a future theme change is a colour swap,
+    // not a shader rewrite).
+    vec3 color = linearToSRGB(blurred.rgb);
+    color = mix(color, fadeColor, edgeMask * fadeAmount);
+    color = mix(fadeColor, color, edgeFade);
 
     // Animated film grain over the whole frame — subtle, luminance-aware so
     // it reads as texture in the mids rather than crushing the blacks.
@@ -809,10 +1060,16 @@ const FISHEYE_FRAGMENT = /* glsl */ `
 `;
 
 // Renders the drum scene to an offscreen target, then draws it back through
-// a fullscreen shader that bends the top/bottom rows inward — one extra
-// render + one fullscreen triangle, far cheaper than a full postprocessing
-// dependency for a single effect.
-function FisheyePost({ children }: { children: React.ReactNode }) {
+// a fullscreen shader that bends the top/bottom rows inward and refracts
+// them through fluted glass ribs — one extra render + one fullscreen
+// triangle, far cheaper than a full postprocessing dependency.
+function FisheyePost({
+  children,
+  velocityRef,
+}: {
+  children: React.ReactNode;
+  velocityRef: React.RefObject<number>; // drum scroll speed, 0..1, written by Drum each frame
+}) {
   const { gl, size, viewport, scene: mainScene } = useThree();
   const fxScene = useMemo(() => new THREE.Scene(), []);
   const fxCamera = useMemo(() => new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1), []);
@@ -839,6 +1096,11 @@ function FisheyePost({ children }: { children: React.ReactNode }) {
     return () => renderTarget.dispose();
   }, [renderTarget]);
 
+  const fadeColorVec = useMemo(() => {
+    const c = new THREE.Color(BG_COLOR);
+    return new THREE.Vector3(c.r, c.g, c.b);
+  }, []);
+
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -849,13 +1111,15 @@ function FisheyePost({ children }: { children: React.ReactNode }) {
           fadeAmount: { value: EDGE_FADE_STRENGTH },
           grain: { value: GRAIN_STRENGTH },
           time: { value: 0 },
+          smear: { value: 0 },
+          fadeColor: { value: fadeColorVec },
         },
         vertexShader: FISHEYE_VERTEX,
         fragmentShader: FISHEYE_FRAGMENT,
         depthTest: false,
         depthWrite: false,
       }),
-    [renderTarget]
+    [renderTarget, fadeColorVec]
   );
 
   /* eslint-disable react-hooks/immutability -- these are the standard R3F
@@ -863,6 +1127,7 @@ function FisheyePost({ children }: { children: React.ReactNode }) {
      toggling renderer state around a manual render-to-target pass. */
   useFrame(({ camera, clock }) => {
     material.uniforms.time.value = clock.elapsedTime;
+    material.uniforms.smear.value = velocityRef.current ?? 0;
 
     // Render the drum into the offscreen target without any output color
     // transform — this pass isn't final output, so the renderer's usual
@@ -915,7 +1180,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
       <span
         style={{
           flexShrink: 0,
-          fontSize: size.caption,
+          fontSize: 11,
           lineHeight: leading.meta,
           letterSpacing: tracking.loose,
           textTransform: "uppercase",
@@ -926,7 +1191,7 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
       </span>
       <span
         style={{
-          fontSize: size.meta,
+          fontSize: 13,
           lineHeight: leading.meta,
           letterSpacing: tracking.normal,
           color: "rgba(255,255,255,0.92)",
@@ -948,10 +1213,14 @@ function DetailPanel({
   box,
   closing,
   onClose,
+  photoIndex,
+  onSelectPhoto,
 }: {
   box: Box;
   closing: boolean;
   onClose: () => void;
+  photoIndex: number;
+  onSelectPhoto: (i: number) => void;
 }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
@@ -959,6 +1228,10 @@ function DetailPanel({
     return () => cancelAnimationFrame(id);
   }, []);
   const visible = shown && !closing;
+
+  // Get the floating nav (mascot + menu) out of the way while the panel owns
+  // the screen; it fades back in as the panel starts sliding out.
+  useHideNav(visible);
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     formatAddress(box.address) + ", Toronto, Ontario"
@@ -973,11 +1246,14 @@ function DetailPanel({
   // fixed nav bar.
   return createDomPortal(
     <div
+      className="grid-detail-panel"
       style={{
         position: "fixed",
-        top: 0,
-        right: 0,
-        bottom: 0,
+        // Inset on every side so the panel reads as a floating card rather
+        // than a full-height sidebar flush to the edges.
+        top: 16,
+        right: 16,
+        bottom: 16,
         width: "min(38vw, 360px)",
         zIndex: 50, // above the site nav (z-index 40) so the panel covers it
         boxSizing: "border-box",
@@ -988,13 +1264,15 @@ function DetailPanel({
         background: "rgba(8,8,8,0.72)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
-        borderLeft: "1px solid rgba(255,255,255,0.1)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 12,
+        boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
         overflowY: "auto",
-        // Slides in fully from off-screen right — "pushed in" from the edge —
-        // and slides back out the same way on close. Matches FOCUS_DURATION /
-        // FOCUS_CLOSE_DURATION (the hero image's fly-in/out time) so the
-        // panel and the image finish animating together in both directions.
-        transform: visible ? "translateX(0)" : "translateX(100%)",
+        // Slides in from off-screen right and back out on close. The extra
+        // 16px clears the inset so it fully leaves the frame. Matches
+        // FOCUS_DURATION / FOCUS_CLOSE_DURATION (the hero image's fly-in/out
+        // time) so the panel and the image finish animating together.
+        transform: visible ? "translateX(0)" : "translateX(calc(100% + 16px))",
         transition: `transform ${closing ? FOCUS_CLOSE_DURATION : FOCUS_DURATION}s cubic-bezier(0.22,1,0.36,1)`,
       }}
     >
@@ -1023,7 +1301,7 @@ function DetailPanel({
         <div style={{ display: "flex", flexDirection: "column" }}>
           <span
             style={{
-              fontSize: size.caption, lineHeight: leading.caption,
+              fontSize: 11, lineHeight: leading.caption,
               letterSpacing: tracking.loose, textTransform: "uppercase",
               color: "rgba(255,255,255,0.5)", marginBottom: 6,
             }}
@@ -1032,7 +1310,7 @@ function DetailPanel({
           </span>
           <span
             style={{
-              fontSize: size.subtitle, lineHeight: leading.subtitle,
+              fontSize: 18, lineHeight: leading.subtitle,
               letterSpacing: tracking.normal, textTransform: "uppercase",
               color: "#ffffff",
             }}
@@ -1045,7 +1323,7 @@ function DetailPanel({
         {box.description && (
           <p
             style={{
-              margin: 0, fontSize: size.meta, lineHeight: leading.body,
+              margin: 0, fontSize: 13, lineHeight: leading.body,
               letterSpacing: tracking.normal, color: "rgba(255,255,255,0.7)",
               textWrap: "pretty",
             } as React.CSSProperties}
@@ -1077,148 +1355,39 @@ function DetailPanel({
             }
           />
         </div>
-      </div>
-    </div>,
-    document.body
-  );
-}
 
-// Coverflow photo stack — ported directly from the gallery's DetailPanel
-// (app/components/DetailPanel.tsx): the active photo centres at full size,
-// with up to two neighbours on each side scaled down and pushed outward.
-// Sits between the 3D hero and the HTML sidebar panel, in its own fixed
-// layer (the hero itself is a WebGL mesh, not an HTML element, so this
-// can't just be laid out inline next to it).
-const COVERFLOW_STAGE_H = 420;
-const COVERFLOW_GAP = 24; // px gap between adjacent cards
-const coverflowScaleFor = (abs: number) => (abs === 0 ? 1 : abs === 1 ? 0.72 : 0.5);
-
-function PhotoCoverflow({
-  photos,
-  index,
-  closing,
-  onSelect,
-}: {
-  photos: string[];
-  index: number;
-  closing: boolean;
-  onSelect: (i: number) => void;
-}) {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
-  const visible = shown && !closing;
-
-  // Load each photo's natural aspect ratio so cards keep their own shape,
-  // same as the gallery's carousel.
-  const [photoAspects, setPhotoAspects] = useState<Record<string, number>>({});
-  useEffect(() => {
-    photos.forEach((src) => {
-      if (photoAspects[src]) return;
-      const img = new window.Image();
-      img.onload = () => {
-        if (img.naturalWidth && img.naturalHeight) {
-          setPhotoAspects((prev) => (prev[src] ? prev : { ...prev, [src]: img.naturalWidth / img.naturalHeight }));
-        }
-      };
-      img.src = src;
-    });
-  }, [photos, photoAspects]);
-
-  if (typeof document === "undefined") return null;
-
-  const cardWidth = (src: string) => Math.round(COVERFLOW_STAGE_H * (photoAspects[src] ?? 0.75));
-
-  // Precompute cumulative x offsets outward from the active card so the gap
-  // between neighbours is even regardless of each card's own orientation.
-  const xFor = (targetOffset: number): number => {
-    if (targetOffset === 0) return 0;
-    const dir = Math.sign(targetOffset);
-    let x = cardWidth(photos[index] ?? "") / 2; // active half-width
-    for (let step = 1; step <= Math.abs(targetOffset); step++) {
-      const idx = index + dir * step;
-      const w = cardWidth(photos[idx] ?? "") * coverflowScaleFor(step);
-      x += COVERFLOW_GAP + w / 2;
-      if (step < Math.abs(targetOffset)) x += w / 2;
-    }
-    return dir * x;
-  };
-
-  return createDomPortal(
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        bottom: 0,
-        left: 0,
-        // Clears the detail panel (min(38vw, 360px) wide) with a margin, so
-        // even the widest peeked neighbour never reaches under the panel.
-        right: "calc(min(38vw, 360px) + 40px)",
-        zIndex: 55, // above both the canvas and the panel (50) — this stack
-                    // is meant to sit fully beside the panel, but a stray
-                    // wide neighbour card overlapping it should still win
-                    // rather than being silently clipped underneath.
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        pointerEvents: "none",
-        opacity: visible ? 1 : 0,
-        transition: "opacity 0.3s ease",
-      }}
-    >
-      <div style={{ position: "relative", width: 340, height: COVERFLOW_STAGE_H, pointerEvents: "auto" }}>
-        {photos.map((src, i) => {
-          const offset = i - index;
-          const abs = Math.abs(offset);
-          if (abs > 2) return null; // active + up to two cards deep each side
-          const isActive = offset === 0;
-          const cardW = cardWidth(src);
-          return (
-            <motion.div
-              key={src}
-              onClick={() => !isActive && onSelect(i)}
-              initial={false}
-              animate={{
-                x: xFor(offset),
-                scale: coverflowScaleFor(abs),
-                opacity: abs === 0 ? 1 : abs === 1 ? 0.55 : 0.32,
-                zIndex: 5 - abs,
-              }}
-              transition={{ type: "spring", stiffness: 260, damping: 30, mass: 0.9 }}
+        {/* Photo strip — click a thumbnail to swap the hero image in place
+            (no re-run of the fly-in/out animation). Only for boxes that
+            actually have more than one photo. */}
+        {box.images && box.images.length > 1 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 12, marginTop: -22, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+            <span
               style={{
-                position: "absolute",
-                left: "50%",
-                top: 0,
-                marginLeft: -cardW / 2,
-                width: cardW,
-                height: COVERFLOW_STAGE_H,
-                cursor: isActive ? "default" : "pointer",
-                boxShadow: isActive ? "0 24px 70px rgba(0,0,0,0.35)" : "0 12px 40px rgba(0,0,0,0.25)",
-                backgroundColor: "#0a0a0a",
-                overflow: "hidden",
+                fontSize: 11, lineHeight: leading.meta,
+                letterSpacing: tracking.loose, textTransform: "uppercase",
+                color: "rgba(255,255,255,0.5)",
               }}
             >
-              <Image src={src} alt="" fill sizes="340px" style={{ objectFit: "cover" }} />
-            </motion.div>
-          );
-        })}
-
-        {/* Photo counter — tabular figures + centred digit slots so the width
-            never shifts between "1 / 3" and "3 / 3". */}
-        {photos.length > 1 && (
-          <div
-            style={{
-              position: "absolute", bottom: 16, left: "50%", transform: "translateX(-50%)",
-              fontSize: size.caption, letterSpacing: tracking.loose, color: "#ffffff",
-              background: "rgba(0,0,0,0.55)", padding: "3px 10px", pointerEvents: "none", zIndex: 6,
-              display: "flex", alignItems: "center", gap: 4, fontVariantNumeric: "tabular-nums",
-            } as React.CSSProperties}
-          >
-            <span style={{ minWidth: "1.1ch", textAlign: "right" }}>{index + 1}</span>
-            <span>/</span>
-            <span style={{ minWidth: "1.1ch", textAlign: "left" }}>{photos.length}</span>
+              Photos
+            </span>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {box.images.map((src, i) => (
+                <div
+                  key={src}
+                  onClick={() => onSelectPhoto(i)}
+                  style={{
+                    width: 56, height: 56, flexShrink: 0, position: "relative",
+                    cursor: "pointer",
+                    outline: i === photoIndex ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.2)",
+                    outlineOffset: -1,
+                    opacity: i === photoIndex ? 1 : 0.65,
+                    transition: "opacity 0.15s ease",
+                  }}
+                >
+                  <Image src={src} alt="" fill style={{ objectFit: "cover" }} sizes="56px" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1275,16 +1444,40 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
   // reports it has fully flown back does `selected` clear.
   const [selected, setSelected] = useState<Selection | null>(null);
   const [closing, setClosing] = useState(false);
-  // Which of the selected box's photos the hero + panel are showing — reset
-  // whenever a new card is opened so it always starts on the cover photo.
+  // Which of the selected box's photos is showing on the hero / photo strip.
   const [photoIndex, setPhotoIndex] = useState(0);
+  // Last-viewed photo per card (by uid), so a drum card that's stepped to a
+  // different photo keeps showing it after the panel closes — `selected`
+  // clears at the same moment the card returns to the ring, so reading the
+  // photo choice off `selected` directly would revert to the cover photo
+  // right at the handoff. This map outlives that clear; it's written from
+  // the photo strip's click handler, never from an effect.
+  const [lastPhotoByUid, setLastPhotoByUid] = useState<Record<string, string>>({});
+  // Drum scroll speed (0..1, smoothed), written by Drum each frame and read
+  // by FisheyePost to drive the motion-smear streaks — a shared ref, since
+  // it changes every frame and must never trigger React renders.
+  const scrollVelocity = useRef(0);
 
-  const open = (sel: Selection) => { setSelected(sel); setClosing(false); setPhotoIndex(0); };
+  const open = (sel: Selection) => {
+    setSelected(sel);
+    setClosing(false);
+    // The drum card may already be showing a non-cover photo (from a
+    // previous visit) — start the photo strip on that photo, not photo 1.
+    const imgs = sel.item.box.images ?? [];
+    setPhotoIndex(Math.max(0, imgs.indexOf(sel.item.src)));
+  };
   const requestClose = () => { if (selected) setClosing(true); };
   const finishClose = () => { setSelected(null); setClosing(false); };
 
   const photos = selected?.item.box.images ?? [];
   const photoSrc = photos[photoIndex] ?? selected?.item.src ?? "";
+
+  const selectPhoto = (i: number) => {
+    setPhotoIndex(i);
+    if (selected && photos[i]) {
+      setLastPhotoByUid((prev) => ({ ...prev, [selected.item.uid]: photos[i] }));
+    }
+  };
 
   // Close on Escape, like any lightbox.
   useEffect(() => {
@@ -1296,20 +1489,22 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
   }, [selected]);
 
   return (
-    <div style={{ width: "100%", height: "100%", background: "#000000" }}>
+    <div style={{ width: "100%", height: "100%", background: BG_COLOR }}>
       <Canvas
-        camera={{ position: [0, 0, 0.01], fov: 85 }}
+        camera={{ position: [0, 0, 0.01], fov: CAMERA_FOV }}
         gl={{ antialias: true }}
         dpr={[1, 1.5]}
         onPointerMissed={requestClose}
       >
-        <FisheyePost>
-          <color attach="background" args={["#000000"]} />
+        <FisheyePost velocityRef={scrollVelocity}>
+          <color attach="background" args={[BG_COLOR]} />
+          <BackgroundGrid />
           <Drum
             items={items}
             yBand={yBand}
             selectedUid={selected?.item.uid ?? null}
-            selectedPhotoSrc={selected ? photoSrc : null}
+            lastPhotoByUid={lastPhotoByUid}
+            velocityRef={scrollVelocity}
             onSelect={open}
           />
           {selected && <Dimmer closing={closing} target={DIM_OPACITY} onClose={requestClose} />}
@@ -1319,12 +1514,14 @@ export default function CylinderGallery3D({ boxes }: { boxes: Box[] }) {
         </FisheyePost>
       </Canvas>
 
-      {selected && photos.length > 1 && (
-        <PhotoCoverflow photos={photos} index={photoIndex} closing={closing} onSelect={setPhotoIndex} />
-      )}
-
       {selected && (
-        <DetailPanel box={selected.item.box} closing={closing} onClose={requestClose} />
+        <DetailPanel
+          box={selected.item.box}
+          closing={closing}
+          onClose={requestClose}
+          photoIndex={photoIndex}
+          onSelectPhoto={selectPhoto}
+        />
       )}
     </div>
   );

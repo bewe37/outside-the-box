@@ -1,55 +1,81 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { createPortal } from "react-dom";
+import React, { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import { AnimatePresence, motion } from "motion/react";
-import { boxes, formatNeighbourhood, formatAddress, type Box, type Neighbourhood } from "@/lib/data";
-import { DetailPanel } from "@/app/components/DetailPanel";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useSpring, useTransform, useVelocity } from "motion/react";
+import { boxes, formatNeighbourhood, formatAddress, formatYear, type Box } from "@/lib/data";
 import { size, tracking, leading } from "@/lib/typography";
-import { useNav } from "@/app/components/nav-context";
 import { useAuth } from "@/app/components/auth-context";
+import { useHideNav } from "@/app/components/nav-context";
+import { useSetDarkTheme } from "@/app/components/theme-context";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { Toast } from "@/app/components/Toast";
 
-const StreetView = dynamic(() => import("./StreetView3D"), { ssr: false });
+const CylinderGallery = dynamic(() => import("../cylinder-test/CylinderGallery3D"), { ssr: false });
 
-type ViewMode = "INDEX" | "PHOTOS";
+// Shared black background for both gallery views.
+const BG_COLOR = "#000000";
+
+// CYLINDER — the WebGL drum — is the landing view; INDEX is the flat photo
+// grid.
+type ViewMode = "CYLINDER" | "INDEX";
 
 // Tiny shared blur placeholder used by every <Image>. Paints instantly while
 // the real (multi-hundred-KB) photo streams in.
-const BLUR_PLACEHOLDER =
-  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20"><rect width="20" height="20" fill="%23E8E8E8"/></svg>';
-
-// Cover photo. The gallery only shows boxes with at least one upload, so this
-// always resolves to a real path; the empty-string fallback is just a guard.
-function imgUrl(box: Box): string {
-  return box.images?.[0] ?? "";
-}
-
-
 
 // ─── Index page ───────────────────────────────────────────────────────────────
 
+// The Index (list) view is desktop-only — phones always get the drum.
+const listAllowed = () => typeof window !== "undefined" && window.innerWidth >= 640;
+
 export default function GalleryPage() {
-  const [view, setView] = useState<ViewMode>("PHOTOS");
+  // Initial view honours ?view=list (the nav's "Index" tab deep-links here);
+  // otherwise the cylinder drum.
+  const [view, setView] = useState<ViewMode>(() => {
+    if (listAllowed() && new URLSearchParams(window.location.search).get("view") === "list") {
+      return "INDEX";
+    }
+    return "CYLINDER";
+  });
   const [collected, setCollected] = useState<Set<number>>(new Set());
   const [gridSelected, setGridSelected] = useState<Box | null>(null);
-  const [photoColumns, setPhotoColumns] = useState(5);
-  const prevColumns = useRef(5);
+  // Natural aspect (w/h) of the clicked grid image — sizes the detail hero's
+  // morph target before the hi-res photo loads.
+  const [heroAspect, setHeroAspect] = useState(4 / 3);
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth <= 640;
 
-  // Set initial columns based on screen width after mount
+  // Both views are dark — the cylinder drum and the black editorial list —
+  // so the nav wears its dark glass throughout the gallery.
+  useSetDarkTheme(true);
+
+  // Keep the view in sync with ?view= when the nav's Gallery/Index tabs push a
+  // new query while we're already mounted (Next doesn't remount on same-route
+  // query changes). The nav dispatches "gallery-view" so we don't need a
+  // Suspense-wrapped useSearchParams.
   useEffect(() => {
-    if (window.innerWidth <= 640) {
-      setPhotoColumns(2);
-      prevColumns.current = 2;
-    }
+    const onViewEvent = (e: Event) => {
+      const v = (e as CustomEvent<string>).detail;
+      setView(v === "list" && listAllowed() ? "INDEX" : "CYLINDER");
+    };
+    window.addEventListener("gallery-view", onViewEvent as EventListener);
+    return () => window.removeEventListener("gallery-view", onViewEvent as EventListener);
   }, []);
-  const { setRight } = useNav();
+
+  // Re-read ?view= once after mount. When navigating here from another page
+  // (Information → Index), the useState initializer above runs before Next
+  // has committed the new URL, so it misses the query and lands on the
+  // cylinder instead of the list. By the post-commit frame the URL is right.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      if (listAllowed() && new URLSearchParams(window.location.search).get("view") === "list") {
+        setView("INDEX");
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const { user, setCollectionCount } = useAuth();
   const router = useRouter();
   const [toast, setToast] = useState("");
@@ -57,18 +83,8 @@ export default function GalleryPage() {
   const hasUpload = (b: Box) => !!(b.images && b.images.length > 0);
   const [allBoxes, setAllBoxes] = useState<Box[]>(() => boxes.filter(hasUpload));
   const [boxesError, setBoxesError] = useState(false);
-  const [activeNeighbourhoods, setActiveNeighbourhoods] = useState<Set<string>>(new Set());
 
-  const neighbourhoods = useMemo(
-    () => Array.from(new Set(allBoxes.map((b) => b.neighbourhood))).sort(),
-    [allBoxes]
-  );
-
-  const hasActiveFilter = activeNeighbourhoods.size > 0;
-
-  const filtered = hasActiveFilter
-    ? allBoxes.filter((b) => activeNeighbourhoods.has(b.neighbourhood))
-    : allBoxes;
+  const filtered = allBoxes;
 
   useEffect(() => {
     fetch("/api/boxes")
@@ -99,22 +115,6 @@ export default function GalleryPage() {
     return () => window.removeEventListener("keydown", onKey);
   }, [gridSelected, filtered]);
 
-  useEffect(() => {
-    if (isMobile) return;
-    setRight(
-      <GalleryControls
-        view={view}
-        onViewChange={setView}
-        photoColumns={photoColumns}
-        onColumnsChange={setPhotoColumns}
-        prevColumnsRef={prevColumns}
-        neighbourhoods={neighbourhoods}
-        activeNeighbourhoods={activeNeighbourhoods}
-        onNeighbourhoodsChange={setActiveNeighbourhoods}
-      />
-    );
-    return () => setRight(null);
-  }, [view, photoColumns, setRight, neighbourhoods, activeNeighbourhoods, isMobile]);
 
   async function toggleCollect(id: number) {
     if (!user) { router.push("/collection"); return; }
@@ -145,36 +145,46 @@ export default function GalleryPage() {
 
 
   return (
+    // Fixed full-viewport, breaking out of page-shell's top padding (which
+    // sits in the body's own background) — both gallery views fill the
+    // screen edge to edge; the nav pieces float on top.
     <div
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",
+        position: "fixed",
+        inset: 0,
         fontFamily: '"Geist", system-ui, sans-serif',
-        color: "#202020",
-        position: "relative",
+        color: "#FFFFFF",
+        background: BG_COLOR,
         overflow: "hidden",
+        zIndex: 1,
       }}
     >
       <AnimatePresence>
         {toast && <Toast key={toast} message={toast} onDone={() => setToast("")} />}
       </AnimatePresence>
       {boxesError && (
-        <div style={{ paddingInline: 12, paddingBlock: 6, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA", fontFamily: '"Geist", system-ui, sans-serif', borderBottom: "1px solid #F4F4F4" }}>
+        <div style={{ paddingInline: 12, paddingBlock: 6, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", fontFamily: '"Geist", system-ui, sans-serif', borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
           Some boxes couldn't be loaded
         </div>
       )}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", position: "relative" }}>
-        {/* Filter empty state */}
-        {filtered.length === 0 && hasActiveFilter && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, fontFamily: '"Geist", system-ui, sans-serif' }}>
-            <p style={{ margin: 0, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#CACACA" }}>
-              No boxes match your filter
-            </p>
-          </div>
-        )}
         <AnimatePresence mode="wait">
-          {filtered.length === 0 ? null : view === "INDEX" ? (
+          {filtered.length === 0 ? null : view === "CYLINDER" ? (
+            <motion.div
+              key="cylinder"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              // Fixed full-viewport, breaking out of page-shell's padded flex
+              // layout. Nav pills float on top (z 40).
+              style={{ position: "fixed", inset: 0, overflow: "hidden", background: BG_COLOR, zIndex: 30 }}
+            >
+              <CylinderGallery boxes={filtered} />
+            </motion.div>
+          ) : (
             <motion.div
               key="index"
               initial={{ opacity: 0 }}
@@ -186,59 +196,20 @@ export default function GalleryPage() {
               <IndexView
                 boxes={filtered}
                 collected={collected}
-                onSelect={setGridSelected}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="photos"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.25, ease: "easeInOut" }}
-              style={{ display: "flex", flex: 1, overflow: "hidden" }}
-            >
-              <StreetView
-                boxes={filtered}
-                collected={collected}
-                onCollect={toggleCollect}
-                onSelect={setGridSelected}
-                columns={photoColumns}
+                onSelect={(b, aspect) => { setGridSelected(b); setHeroAspect(aspect); }}
               />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Full-screen detail overlay */}
+      {/* Detail overlay — dark floating panel + hero that morphs from the
+          clicked grid card (shared layoutId). */}
       <AnimatePresence>
         {gridSelected && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-            style={{ position: "fixed", inset: 0, zIndex: 60 }}
-          >
-            {(() => {
-              const i = filtered.findIndex((b) => b.id === gridSelected.id);
-              return (
-                <DetailPanel
-                  box={gridSelected}
-                  displayNumber={i + 1}
-                  isCollected={collected.has(gridSelected.id)}
-                  onCollect={() => toggleCollect(gridSelected.id)}
-                  onPrev={() => { if (i > 0) setGridSelected(filtered[i - 1]); }}
-                  onNext={() => { if (i >= 0 && i < filtered.length - 1) setGridSelected(filtered[i + 1]); }}
-                  hasPrev={i > 0}
-                  hasNext={i >= 0 && i < filtered.length - 1}
-                  prevSrc={i > 0 ? imgUrl(filtered[i - 1]) : undefined}
-                  nextSrc={i >= 0 && i < filtered.length - 1 ? imgUrl(filtered[i + 1]) : undefined}
-                  onClose={() => setGridSelected(null)}
-                />
-              );
-            })()}
-          </motion.div>
+          <div key="grid-detail" style={{ position: "fixed", inset: 0, zIndex: 60 }}>
+            <GridDetail key={gridSelected.id} box={gridSelected} aspect={heroAspect} onClose={() => setGridSelected(null)} />
+          </div>
         )}
       </AnimatePresence>
     </div>
@@ -247,529 +218,515 @@ export default function GalleryPage() {
 
 // ─── Index view ───────────────────────────────────────────────────────────────
 
-// ─── Motion depth stack (fixed, viewport-centered) ────────────────────────────
 
-// 2:3 frame — matches the portrait photos exactly so they show uncropped
-// (object-fit: cover). Landscape photos crop to their center.
-const STACK_W = 300, STACK_H = 450;
+// Left padding of the index list (matches the nav's edge inset).
+const INDEX_PAD_LEFT = 24;
 
-// Tunable knobs for the stack geometry. Defaults match the baked-in look;
-// the dial kit (DepthStackDials) overrides these live.
-export type StackParams = {
-  spacing: number;   // px gap between each stacked card (peek)
-  blurStep: number;  // px of blur added per depth level
-  exitBlur: number;  // px of blur on a card as it fades out (item swap)
-};
+function IndexView({
+  boxes,
+  onSelect,
+}: {
+  boxes: Box[];
+  collected: Set<number>;
+  onSelect: (b: Box, aspect: number) => void;
+}) {
+  // Align the title column under the nav's "Gallery/Index" tabs and the year
+  // column under "Information" by measuring those nav elements directly. The
+  // nav spacing is DialKit-tunable, so hardcoded widths would drift — this
+  // reads the real positions (offsets are relative to the list's content box,
+  // hence the INDEX_PAD_LEFT subtraction).
+  const [titleX, setTitleX] = useState(280);
+  const [yearX, setYearX] = useState(560);
+  // Row under the cursor — drives the floating photo preview and dims the
+  // rest of the list so the image reads against quieter text.
+  const [hovered, setHovered] = useState<Box | null>(null);
+  // True while the preview is handing off to the detail hero (row click):
+  // its exit must be instant then, or a ghost card lingers fading at the
+  // cursor while the hero morphs away — that read as flicker.
+  const [handoff, setHandoff] = useState(false);
+  // Hover is a mouse concept: on touch, a tap fires mouseenter before click,
+  // which flashed the preview and left the tapped row stuck inverted. Gate
+  // the whole hover layer (preview, dimming, springs) to fine pointers.
+  const [canHover] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(hover: hover) and (pointer: fine)").matches
+  );
+  // Natural aspect (w/h) per image src, measured by the preview as photos
+  // load. Row clicks read it so the detail hero opens at the same shape the
+  // preview is showing — the layoutId morph is then a clean move+scale.
+  const aspectCache = useRef(new Map<string, number>());
+  useEffect(() => {
+    const measure = () => {
+      const gallery = document.getElementById("nav-gallery-tab");
+      const info = document.getElementById("nav-info-tab");
+      if (gallery) setTitleX(gallery.getBoundingClientRect().left - INDEX_PAD_LEFT);
+      if (info) setYearX(info.getBoundingClientRect().left - INDEX_PAD_LEFT);
+    };
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener("resize", measure);
+    window.addEventListener("nav-info-x", measure as EventListener);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("nav-info-x", measure as EventListener);
+    };
+  }, []);
 
-export const DEFAULT_STACK_PARAMS: StackParams = { spacing: 30, blurStep: 2, exitBlur: 50 };
-
-// Geometry per depth slot. index 0 = front (large, sharp), higher = receding.
-// Anchored from the top so each card's top edge peeks a fixed gap above the
-// one in front; the shrink pulls the bottom up and never hides the peek.
-function slotGeo(i: number, p: StackParams) {
-  return {
-    y: -i * p.spacing,                          // gap above the front card
-    scale: 1 - i * 0.08,                        // 1, .92, .84, .76 — recede
-    blur: i === 0 ? 0 : p.blurStep + (i - 1) * p.blurStep, // 0, step, 2·step…
-    opacity: 1 - i * 0.12,                      // 1, .88, .76, .64
-  };
-}
-
-// A single card. Keyed by image, so when the hovered item changes, motion
-// slides each surviving card forward one depth slot (the `layout` animation).
-// A newly added card simply fades in AT its back slot — no flying in from above.
-// The front card fades + blurs out as it leaves.
-function StackCard({ src, depth, params, spring }: { src: string; depth: number; params: StackParams; spring: object }) {
-  const g = slotGeo(depth, params);
   return (
-    <motion.div
-      // Position animated via `y` (not layout), so a new card starts AT its own
-      // slot + a tiny 8px rise — never flashing high. Surviving cards animate
-      // their y from the old slot to the new one as depth changes.
-      initial={{ opacity: 0, y: g.y + 8, boxShadow: "0 12px 48px rgba(0,0,0,0)", filter: `blur(${g.blur}px)` }}
-      animate={{
-        opacity: g.opacity,
-        y: g.y,
-        scale: g.scale,
-        filter: `blur(${g.blur}px)`,
-        // Only the front card carries a shadow; it fades in/out with the card.
-        boxShadow: depth === 0 ? "0 12px 48px rgba(0,0,0,0.16)" : "0 12px 48px rgba(0,0,0,0)",
-      }}
-      exit={{
-        opacity: 0,
-        // fade the shadow to nothing + a touch of blur as the card leaves
-        boxShadow: "0 12px 48px rgba(0,0,0,0)",
-        filter: `blur(${g.blur + 6}px)`,
-        transition: { duration: 0.3, ease: "easeOut" },
-      }}
-      transition={{
-        y: spring,
-        scale: spring,
-        opacity: { duration: 0.3, ease: "easeOut" },
-        boxShadow: { duration: 0.3, ease: "easeOut" },
-        filter: { duration: 0.3, ease: "easeOut" },
-      }}
+    <div
+      className="index-scroll"
+      onMouseLeave={() => setHovered(null)}
       style={{
-        position: "absolute",
-        width: STACK_W,
-        height: STACK_H,
-        left: 0,
-        top: 0,
-        transformOrigin: "center top",
-        zIndex: 10 - depth,
-        overflow: "hidden",
-        backgroundColor: "#E8E8E8",
+        flex: 1,
+        position: "relative",
+        overflowY: "auto",
+        background: BG_COLOR,
+        padding: `clamp(56px, 12vh, 96px) 24px 80px ${INDEX_PAD_LEFT}px`,
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", filter: "saturate(1.1)" }} />
-    </motion.div>
+      {/* Dense text list — columns pinned to the nav tab positions above. */}
+      <div>
+        {boxes.map((box, i) => (
+          <IndexRow
+            key={box.id}
+            box={box}
+            index={i}
+            titleX={titleX}
+            yearX={yearX}
+            dimmed={hovered !== null && hovered.id !== box.id}
+            onHover={() => {
+              if (!canHover) return;
+              setHandoff(false);
+              setHovered(box);
+            }}
+            onSelect={() => {
+              const src = box.images?.[0];
+              setHandoff(true);
+              setHovered(null);
+              onSelect(box, (src && aspectCache.current.get(src)) || 4 / 3);
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Floating photo preview, trailing the cursor — mouse only. Not
+          mounting it on touch also skips its springs and the global
+          mousemove listener entirely. */}
+      {canHover && (
+        <HoverPreview src={hovered?.images?.[0] ?? null} instantExit={handoff} aspectCache={aspectCache} />
+      )}
+    </div>
   );
 }
 
-function DepthStack({ srcs, visible, params, spring }: { srcs: string[]; visible: boolean; params: StackParams; spring: object }) {
-  const cards = srcs.slice(0, 4);
+// ─── HoverPreview ─────────────────────────────────────────────────────────────
+// The index list's floating photo: trails the cursor on a spring, leans into
+// the direction of travel (rotation from cursor velocity), and crossfades
+// when the hovered row's photo changes. Position/rotation live entirely in
+// motion values, so mouse movement never re-renders React.
+//
+// The card keeps each photo's real orientation: its box is sized from the
+// image's natural aspect (longest edge capped at PREVIEW_MAX), so landscapes
+// stay landscape. It also carries layoutId="index-hero", shared with the
+// detail panel's hero — clicking a row morphs the floating preview smoothly
+// into the opened hero instead of fading through black.
+
+const PREVIEW_MAX = 300;
+
+function HoverPreview({
+  src,
+  instantExit,
+  aspectCache,
+}: {
+  src: string | null;
+  // On row click the preview hands off to the detail hero (shared layoutId);
+  // its own exit must vanish instantly or a ghost lingers at the cursor
+  // fading while the hero morphs away.
+  instantExit: boolean;
+  aspectCache: React.MutableRefObject<Map<string, number>>;
+}) {
+  const reduce = useReducedMotion();
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  // Springy trail; reduced motion gets a stiff, near-direct follow.
+  const springCfg = reduce
+    ? { stiffness: 1500, damping: 90 }
+    : { stiffness: 350, damping: 30 };
+  const x = useSpring(mx, springCfg);
+  const y = useSpring(my, springCfg);
+  // Lean with horizontal velocity, spring-smoothed so it settles gently.
+  const vx = useVelocity(x);
+  const rotateRaw = useTransform(vx, [-1200, 1200], reduce ? [0, 0] : [-8, 8], { clamp: true });
+  const rotate = useSpring(rotateRaw, { stiffness: 200, damping: 22 });
+
+  // Natural aspect (w/h) of the current photo, derived from the cache at
+  // render time; onLoad below fills the cache and bumps `measured` so a
+  // freshly loaded photo re-renders into its true shape (the layoutId spring
+  // animates the size change).
+  const [, setMeasured] = useState(0);
+  const ratio = (src && aspectCache.current.get(src)) || 4 / 3;
+  const w = ratio >= 1 ? PREVIEW_MAX : Math.round(PREVIEW_MAX * ratio);
+  const h = ratio >= 1 ? Math.round(PREVIEW_MAX / ratio) : PREVIEW_MAX;
+
+  // Track the cursor globally — the springs keep following even while the
+  // preview is hidden, so it fades in already at the cursor instead of
+  // flying across the screen from its last position. The vertical target is
+  // clamped so a tall card centred on the cursor can't extend above/below
+  // the viewport (that clipped the preview when hovering the first row).
+  useEffect(() => {
+    const margin = 24;
+    const onMove = (e: MouseEvent) => {
+      mx.set(e.clientX);
+      const half = h / 2;
+      const minY = half + margin;
+      const maxY = window.innerHeight - half - margin;
+      my.set(Math.min(Math.max(e.clientY, minY), maxY));
+    };
+    window.addEventListener("mousemove", onMove);
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [mx, my, h]);
 
   return (
-    <AnimatePresence>
-      {visible && (
+    <AnimatePresence custom={instantExit}>
+      {src && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          style={{
-            position: "fixed",
-            left: "50%",
-            top: "50%",
-            transform: "translate(-50%, -50%)",
-            width: STACK_W,
-            height: STACK_H,
-            pointerEvents: "none",
-            zIndex: 40,
+          variants={{
+            hidden: { opacity: 0, scale: 0.92 },
+            shown: { opacity: 1, scale: 1, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
+            // Instant when handing off to the detail hero; soft fade on a
+            // plain un-hover.
+            exit: (instant: boolean) =>
+              instant
+                ? { opacity: 0, transition: { duration: 0 } }
+                : { opacity: 0, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] } },
           }}
+          initial="hidden"
+          animate="shown"
+          exit="exit"
+          style={{ position: "fixed", top: 0, left: 0, x, y, zIndex: 39, pointerEvents: "none" }}
         >
-          {/* Keyed by image so motion slides each surviving card forward a slot
-              when the item changes; the new card fades in at the back slot. */}
-          <AnimatePresence mode="popLayout">
-            {cards.map((src, depth) => (
-              <StackCard key={src} src={src} depth={depth} params={params} spring={spring} />
-            ))}
-          </AnimatePresence>
+          <motion.div
+            layoutId="index-hero"
+            // Size changes (portrait ↔ landscape as rows swap) snap instantly —
+            // animating them read as wobble. The click-morph into the detail
+            // hero still animates: that layout animation runs on the hero
+            // element, which carries its own spring transition.
+            transition={{ layout: { duration: 0 } }}
+            style={{
+              position: "relative",
+              width: w,
+              height: h,
+              marginLeft: -w / 2,
+              marginTop: -h / 2,
+              rotate,
+              borderRadius: 4,
+              overflow: "hidden",
+              background: "#141414",
+              boxShadow: "0 24px 70px rgba(0,0,0,0.55)",
+            }}
+          >
+            {/* Crossfade between rows' photos as the cursor sweeps the list. */}
+            <AnimatePresence initial={false}>
+              <motion.div
+                key={src}
+                initial={{ opacity: 0, scale: 1.08 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                style={{ position: "absolute", inset: 0 }}
+              >
+                <Image
+                  src={src}
+                  alt=""
+                  fill
+                  sizes="300px"
+                  style={{ objectFit: "cover" }}
+                  onLoad={(e) => {
+                    const img = e.currentTarget;
+                    if (img.naturalWidth > 0) {
+                      aspectCache.current.set(src, img.naturalWidth / img.naturalHeight);
+                      setMeasured((n) => n + 1);
+                    }
+                  }}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
 }
 
-function IndexView({
-  boxes,
-  collected,
+function IndexRow({
+  box,
+  index,
+  titleX,
+  yearX,
+  dimmed,
+  onHover,
   onSelect,
 }: {
-  boxes: Box[];
-  collected: Set<number>;
-  onSelect: (b: Box) => void;
+  box: Box;
+  index: number;
+  titleX: number;
+  yearX: number;
+  dimmed: boolean;
+  onHover: () => void;
+  onSelect: () => void;
 }) {
-  const [hovered, setHovered] = useState<Box | null>(null);
-  const hoveredIndex = hovered ? boxes.findIndex(b => b.id === hovered.id) : -1;
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Depth-stack geometry + the spring that settles cards as they shift slots.
-  const stackParams = DEFAULT_STACK_PARAMS;
-  const stackSpring = { type: "spring" as const, visualDuration: 0.32, bounce: 0 };
-
-  // front = hovered box, then next 3 boxes looping
-  const srcs = useMemo(() => {
-    if (hoveredIndex < 0 || boxes.length === 0) return [];
-    return Array.from({ length: 4 }, (_, i) => {
-      const idx = (hoveredIndex + i) % boxes.length;
-      return boxes[idx]?.images?.[0] ?? "";
-    }).filter(Boolean);
-  }, [hoveredIndex, boxes]);
-
-  // Track each row's geometry so the shared highlight bar can slide to it.
-  const rowRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const [highlight, setHighlight] = useState<{ top: number; height: number } | null>(null);
-
-  function handleHover(box: Box) {
-    setHovered(box);
-    const el = rowRefs.current.get(box.id);
-    const container = containerRef.current;
-    if (el && container) {
-      setHighlight({ top: el.offsetTop, height: el.offsetHeight });
-    }
-  }
-
+  const cell: React.CSSProperties = {
+    fontSize: 12,
+    letterSpacing: tracking.normal,
+    // colour comes from .index-row (and flips on hover via CSS) — an inline
+    // colour here would override the :hover inversion.
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  };
   return (
-    <div
-      ref={containerRef}
-      onMouseLeave={() => { setHovered(null); }}
-      className="index-scroll"
+    <motion.button
+      onClick={onSelect}
+      onMouseEnter={onHover}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3, delay: Math.min(index * 0.012, 0.3), ease: "easeOut" }}
       style={{
-        flex: 1,
-        position: "relative",
-        overflowY: "auto",
-        paddingTop: 24,
-        paddingInline: 20,
-      }}
+        display: "grid",
+        // Columns start exactly at the measured nav positions. No column-gap
+        // (it would shift each start point); instead each cell reserves a
+        // little right padding so text doesn't touch the next column.
+        // number → artist(fills to titleX) → title(fills to yearX) → year
+        gridTemplateColumns: `${Math.max(titleX, 120)}px ${Math.max(yearX - titleX, 100)}px 1fr`,
+        alignItems: "baseline",
+        // Bleeds past the list's own side padding so the hover fill (an
+        // ::before with inset:0) reaches the true screen edges; the matching
+        // horizontal padding keeps the text sitting exactly where it did.
+        width: `calc(100% + ${INDEX_PAD_LEFT}px + 24px)`,
+        marginLeft: -INDEX_PAD_LEFT,
+        padding: `8px 24px 8px ${INDEX_PAD_LEFT}px`,
+        boxSizing: "border-box",
+        background: "none",
+        border: "none",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+        cursor: "pointer",
+        textAlign: "left",
+        fontFamily: "inherit",
+        // Colour lives on .index-row so the hover inversion can flip it.
+        // Dim everything except the hovered row (motion owns `opacity` for
+        // the entrance stagger, so the dim rides on filter instead). This
+        // inline transition overrides the class's, so re-declare color here.
+        filter: dimmed ? "brightness(0.35)" : "brightness(1)",
+        transition: "filter 0.25s ease, color 0.55s ease",
+      } as React.CSSProperties}
+      className="index-row"
     >
-      <DepthStack srcs={srcs} visible={hovered !== null} params={stackParams} spring={stackSpring} />
+      {/* number + artist share the first column (number fixed, artist fills) */}
+      <span style={{ display: "flex", gap: 16, minWidth: 0, paddingRight: 16 }}>
+        <span style={{ ...cell, flexShrink: 0, width: 44 }}>{String(index + 1).padStart(3, "0")}</span>
+        <span style={{ ...cell, textTransform: "uppercase" }}>{box.artist}</span>
+      </span>
+      <span style={{ ...cell, paddingRight: 16 }}>{box.title}</span>
+      {/* uppercase so "Unknown" reads as UNKNOWN, matching the artist column */}
+      <span style={{ ...cell, textTransform: "uppercase" }}>{formatYear(box.year)}</span>
+    </motion.button>
+  );
+}
 
-      {/* Shared sliding highlight — spans full viewport width, follows the
-          hovered row instead of re-rendering per row. */}
-      <AnimatePresence>
-        {hovered && highlight && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, top: highlight.top, height: highlight.height }}
-            exit={{ opacity: 0 }}
-            transition={{
-              opacity: { duration: 0.15 },
-              top: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-              height: { duration: 0.28, ease: [0.22, 1, 0.36, 1] },
-            }}
-            style={{
-              position: "absolute",
-              // extend past the 32px container padding to reach the viewport edges
-              left: -32,
-              right: -32,
-              top: highlight.top,
-              height: highlight.height,
-              backgroundColor: "#F7F7F7",
-              pointerEvents: "none",
-              zIndex: 0,
-            }}
-          />
-        )}
-      </AnimatePresence>
+// ─── GridDetail ─────────────────────────────────────────────────────────────
+// The grid's detail view, styled like the cylinder's: a dark floating panel
+// on the right, a large hero image on the left, and a photo strip. The hero
+// shares a layoutId with the clicked grid card's image, so Motion morphs it
+// smoothly from its grid position into the hero spot (the same feel as the
+// cylinder card flying into the carousel).
 
-      {boxes.map((box, i) => (
-        <motion.div
-          key={box.id}
-          ref={(el) => {
-            if (el) rowRefs.current.set(box.id, el);
-            else rowRefs.current.delete(box.id);
-          }}
-          initial={{ opacity: 0, x: -10 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.22, delay: i * 0.035, ease: [0.25, 0.1, 0.25, 1] }}
-        >
-          <IndexRow
-            box={box}
-            displayNumber={i + 1}
-            isSelected={false}
-            isDimmed={hovered !== null && hovered.id !== box.id}
-            isCollected={collected.has(box.id)}
-            isHovered={hovered?.id === box.id}
-            onSelect={() => onSelect(box)}
-            onMouseEnter={() => handleHover(box)}
-            onMouseLeave={() => {}}
-          />
-        </motion.div>
-      ))}
-      <div style={{ paddingTop: 40, paddingBottom: 24, fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#202020" }}>
-        Last updated July 6, 2026 · {boxes.length} boxes
-      </div>
+function GridDetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, paddingBlock: 12, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+      <span style={{ flexShrink: 0, fontSize: 11, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)" }}>{label}</span>
+      <span style={{ fontSize: 13, lineHeight: leading.meta, letterSpacing: tracking.normal, color: "rgba(255,255,255,0.92)", textAlign: "right" }}>{value}</span>
     </div>
   );
 }
 
-function IndexRow({
-  box,
-  displayNumber,
-  isSelected,
-  isDimmed,
-  isCollected,
-  isHovered,
-  onSelect,
-  onMouseEnter,
-  onMouseLeave,
-}: {
-  box: Box;
-  displayNumber: number;
-  isSelected: boolean;
-  isDimmed: boolean;
-  isCollected: boolean;
-  isHovered: boolean;
-  onSelect: () => void;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
-}) {
-  const textColor = isDimmed ? "#D3D3D3" : "#202020";
-  const transition = "color 200ms ease";
+function GridDetail({ box, aspect, onClose }: { box: Box; aspect: number; onClose: () => void }) {
+  const photos = box.images ?? [];
+  // Keyed by box.id at the call site, so this remounts (photoIndex resets to 0)
+  // whenever a different box opens — no effect needed to reset it.
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const heroSrc = photos[photoIndex] ?? photos[0] ?? "";
 
-  return (
-    <button
-      onClick={onSelect}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      className="index-row index-row-btn"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        paddingBlock: 10,
-        paddingInline: 0,
-        background: "none",
-        border: "none",
-        borderBottom: "none",
-        cursor: "pointer",
-        textAlign: "left",
-        width: "100%",
-        fontFamily: "inherit",
-        fontWeight: 400,
-        position: "relative",
-      }}
-    >
-      {/* Left group: (number) TITLE */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flex: "0 0 auto" }}>
-        <span style={{ flexShrink: 0, fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
-          ({String(displayNumber).padStart(2, "0")})
-        </span>
-        <span style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
-          {box.title}
-        </span>
-      </div>
+  // Get the floating nav (mascot + menu) out of the way while this is open.
+  useHideNav(true);
 
-      {/* Spacer — the global fixed stack floats over this area */}
-      <div style={{ flex: 1 }} />
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    formatAddress(box.address) + ", Toronto, Ontario"
+  )}`;
 
-      {/* Right group: ARTIST · NEIGHBOURHOOD — adjacent, flush right */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: "0 0 auto" }}>
-        <span className="index-col" style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
-          {box.artist}
-        </span>
-        {/* Dot separator — floats between artist and neighbourhood */}
-        <span style={{ width: 3, height: 3, borderRadius: "50%", flexShrink: 0, backgroundColor: textColor, display: "inline-block", transition }} />
-        <span className="index-col" style={{ fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label, textTransform: "uppercase", color: textColor, transition }}>
-          {formatNeighbourhood(box.neighbourhood)}
-        </span>
-      </div>
-
-      {/* Mobile thumbnail */}
-      {box.images?.[0] && (
-        <div className="index-thumb" style={{ display: "none", width: 48, height: 48, flexShrink: 0, overflow: "hidden", marginLeft: 12 }}>
-          <Image src={box.images[0]} alt={box.title} width={48} height={48} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-        </div>
-      )}
-    </button>
-  );
-}
-
-
-// ─── ClearButton ──────────────────────────────────────────────────────────────
-
-function ClearButton({ enabled, onClick }: { enabled: boolean; onClick: () => void }) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <button
-      onClick={enabled ? onClick : undefined}
-      onMouseEnter={() => enabled && setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        width: "100%", padding: "5px 12px", background: "none", border: "none",
-        cursor: enabled ? "pointer" : "default", textAlign: "left", fontFamily: "inherit",
-        fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase",
-        color: enabled ? (hovered ? "#202020" : "#A8A8A8") : "#D8D8D8",
-        transition: "color 0.12s ease",
-      }}
-    >
-      Clear
-    </button>
-  );
-}
-
-// ─── HoverBtn ─────────────────────────────────────────────────────────────────
-
-const HoverBtn = React.forwardRef<HTMLButtonElement, {
-  children: React.ReactNode;
-  onClick: () => void;
-  active?: boolean;
-  className?: string;
-}>(function HoverBtn({ children, onClick, active, className }, ref) {
-  const [hovered, setHovered] = useState(false);
-  const color = active || hovered ? "#202020" : "#A8A8A8";
-  return (
-    <button
-      ref={ref}
-      onClick={onClick}
-      className={className}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: "none", border: "none", outline: "none", cursor: "pointer",
-        padding: 0, fontFamily: "inherit",
-        fontSize: size.meta, lineHeight: leading.meta, letterSpacing: tracking.label,
-        textTransform: "uppercase", color, transition: "color 0.12s ease", fontWeight: 500,
-      }}
-    >
-      {children}
-    </button>
-  );
-});
-
-// ─── GalleryControls ──────────────────────────────────────────────────────────
-
-function GalleryControls({
-  view, onViewChange, photoColumns, onColumnsChange, prevColumnsRef,
-  neighbourhoods, activeNeighbourhoods, onNeighbourhoodsChange,
-}: {
-  view: "INDEX" | "PHOTOS";
-  onViewChange: (v: "INDEX" | "PHOTOS") => void;
-  photoColumns: number;
-  onColumnsChange: (n: number) => void;
-  prevColumnsRef: React.MutableRefObject<number>;
-  neighbourhoods: string[];
-  activeNeighbourhoods: Set<string>;
-  onNeighbourhoodsChange: (s: Set<string>) => void;
-}) {
-  const [showFilter, setShowFilter] = useState(false);
-  // Direction of the last column change: +1 = increased (slide up), -1 = decreased.
-  // Stored in state so the entering and exiting digit agree on direction.
-  const [colDir, setColDir] = useState(1);
-  const [filterPos, setFilterPos] = useState<{ top: number; left: number } | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!showFilter) return;
-    let raf: number;
-    function track() {
-      if (btnRef.current) {
-        const r = btnRef.current.getBoundingClientRect();
-        setFilterPos({ top: r.bottom + 12, left: r.left });
-      }
-      raf = requestAnimationFrame(track);
-    }
-    raf = requestAnimationFrame(track);
-    return () => cancelAnimationFrame(raf);
-  }, [showFilter]);
-
-  function toggle(n: string) {
-    const next = new Set(activeNeighbourhoods);
-    if (next.has(n)) next.delete(n); else next.add(n);
-    onNeighbourhoodsChange(next);
-  }
-
-  useEffect(() => {
-    if (!showFilter) return;
-    const onDown = (e: MouseEvent) => {
-      if (!panelRef.current?.contains(e.target as Node) && !btnRef.current?.contains(e.target as Node)) {
-        setShowFilter(false);
-      }
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowFilter(false); };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [showFilter]);
+  // Movement/morph on screen → ease-in-out; backdrop fade paired at the same
+  // timing. The hero's own position/size morph is Motion's layout spring.
+  const EASE = [0.65, 0.05, 0.36, 1] as const;
 
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {(["PHOTOS", "INDEX"] as const).map((v) => (
-          <HoverBtn key={v} onClick={() => onViewChange(v)} active={view === v}>
-            [{v === "PHOTOS" ? "GRID" : v}]
-          </HoverBtn>
-        ))}
+      {/* Dimmed backdrop — click to close. */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3, ease: EASE }}
+        onClick={onClose}
+        className="detail-backdrop"
+        style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.82)", backdropFilter: "blur(2px)", WebkitBackdropFilter: "blur(2px)" }}
+      />
 
-        <AnimatePresence>
-          {view === "PHOTOS" && (
-            <motion.div key="slider" className="nav-slider" initial={{ opacity: 0, width: 0 }} animate={{ opacity: 1, width: "auto" }} exit={{ opacity: 0, width: 0 }} transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }} style={{ overflow: "hidden", display: "flex", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 14, borderLeft: "1px solid #E8E8E8" }}>
-                <input type="range" className="col-slider" min={2} max={6} value={photoColumns}
-                  onChange={(e) => {
-                    const next = Number(e.target.value);
-                    if (next === photoColumns) return;
-                    setColDir(next > photoColumns ? 1 : -1);
-                    prevColumnsRef.current = photoColumns;
-                    onColumnsChange(next);
-                  }}
-                />
-                <span style={{ display: "inline-block", width: 10, height: 16, overflow: "hidden", position: "relative", verticalAlign: "middle" }}>
-                  <AnimatePresence mode="popLayout" initial={false} custom={colDir}>
-                    <motion.span
-                      key={photoColumns}
-                      custom={colDir}
-                      variants={{
-                        enter: (dir: number) => ({ y: dir > 0 ? "100%" : "-100%" }),
-                        center: { y: "0%" },
-                        exit: (dir: number) => ({ y: dir > 0 ? "-100%" : "100%" }),
-                      }}
-                      initial="enter"
-                      animate="center"
-                      exit="exit"
-                      transition={{ duration: 0.18, ease: [0.25, 0.1, 0.25, 1] }}
-                      style={{ display: "block", fontSize: size.meta, lineHeight: "16px", letterSpacing: tracking.normal, color: "#202020", fontFamily: "inherit", textAlign: "center" }}
-                    >
-                      {photoColumns}
-                    </motion.span>
-                  </AnimatePresence>
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        <div className="nav-divider" style={{ width: 1, height: 12, background: "#E8E8E8" }} />
-        <HoverBtn
-          ref={btnRef}
-          className="nav-filter"
-          onClick={() => setShowFilter((s) => !s)}
-          active={activeNeighbourhoods.size > 0 || showFilter}
+      {/* Hero image — shares layoutId "index-hero" with the index list's
+          floating cursor preview, so opening a row morphs the small preview
+          smoothly into this spot (move + expand) instead of a plain fade.
+          The box is sized from the same measured aspect the preview used,
+          so the morph is a clean translate/scale with no distortion. */}
+      <div
+        className="detail-hero-wrap"
+        style={{
+          position: "absolute",
+          inset: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxSizing: "border-box",
+          paddingLeft: 48,
+          // clear the floating panel (min(38vw, 360px) wide + 16px inset)
+          paddingRight: "calc(min(38vw, 360px) + 48px)",
+          pointerEvents: "none",
+        }}
+      >
+        <motion.div
+          layoutId="index-hero"
+          exit={{ opacity: 0 }}
+          transition={{ type: "spring", visualDuration: 0.55, bounce: 0.12 }}
+          className="detail-hero"
+          style={{
+            position: "relative",
+            width: `min(100%, calc(76vh * ${aspect}))`,
+            aspectRatio: String(aspect),
+            // Exposed for the mobile stylesheet, which re-derives the hero's
+            // width from a height cap instead of the desktop formula above.
+            "--hero-aspect": String(aspect),
+            borderRadius: 4,
+            overflow: "hidden",
+            boxShadow: "0 30px 90px rgba(0,0,0,0.6)",
+            background: "#141414",
+            pointerEvents: "auto",
+          } as React.CSSProperties}
         >
-          [Filter]
-        </HoverBtn>
+          {/* Low-res underlay: the same 300px variant the hover preview
+              already loaded, so the morphing box shows the photo instantly
+              instead of flashing dark while the hi-res copy fetches. */}
+          <Image
+            src={heroSrc}
+            alt=""
+            fill
+            sizes="300px"
+            style={{ objectFit: "cover" }}
+          />
+          <Image
+            key={heroSrc}
+            src={heroSrc}
+            alt={box.title}
+            fill
+            sizes="60vw"
+            style={{ objectFit: "cover" }}
+          />
+        </motion.div>
       </div>
 
-      {typeof document !== "undefined" && createPortal(
-        <AnimatePresence>
-          {showFilter && (
-            <motion.div
-              ref={panelRef}
-              initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
-              transition={{ duration: 0.16, ease: [0.25, 0.1, 0.25, 1] }}
-              style={{
-                position: "fixed",
-                top: filterPos?.top ?? 44,
-                left: filterPos ? filterPos.left : "50%",
-                zIndex: 200,
-                background: "#FFFFFF",
-                border: "1px solid #E8E8E8",
-                boxShadow: "0 8px 32px rgba(0,0,0,0.08)",
-                padding: "6px 0",
-                minWidth: 160,
-                fontFamily: '"Geist", system-ui, sans-serif',
-              }}
-            >
-              <div style={{ padding: "4px 12px 6px", fontSize: size.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "#AAAAAA" }}>Neighbourhood</div>
-              {neighbourhoods.map((n) => {
-                const checked = activeNeighbourhoods.has(n);
-                return (
-                  <button key={n} onClick={() => toggle(n)}
-                    style={{ width: "100%", display: "flex", alignItems: "center", gap: 7, padding: "5px 12px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit", fontSize: size.meta, letterSpacing: tracking.normal, color: checked ? "#202020" : "#606060", transition: "color 0.12s ease" }}
-                  >
-                    <span style={{ width: 13, height: 13, border: `1px solid ${checked ? "#202020" : "#D0D0D0"}`, borderRadius: 2, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", background: checked ? "#202020" : "transparent", transition: "all 0.12s ease" }}>
-                      {checked && (
-                        <svg width="7" height="6" viewBox="0 0 7 6" fill="none">
-                          <path d="M1 3L2.8 5L6 1" stroke="#FFFFFF" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
-                    </span>
-                    {formatNeighbourhood(n)}
-                  </button>
-                );
-              })}
-              <div style={{ height: 1, background: "#F0F0F0", margin: "4px 0" }} />
-              <ClearButton
-                enabled={activeNeighbourhoods.size > 0}
-                onClick={() => { onNeighbourhoodsChange(new Set()); setShowFilter(false); }}
-              />
-            </motion.div>
+      {/* Floating dark panel — same look as the cylinder's DetailPanel. */}
+      <motion.div
+        initial={{ opacity: 0, x: 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 24 }}
+        transition={{ duration: 0.4, ease: EASE }}
+        className="grid-detail-panel"
+        style={{
+          position: "absolute",
+          top: 16, right: 16, bottom: 16,
+          width: "min(38vw, 360px)",
+          boxSizing: "border-box",
+          display: "flex", flexDirection: "column",
+          background: "rgba(8,8,8,0.72)",
+          backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)",
+          border: "1px solid rgba(255,255,255,0.1)",
+          borderRadius: 12,
+          boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
+          overflowY: "auto",
+        }}
+      >
+        {/* Close */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "16px 20px", flexShrink: 0 }}>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 38, padding: 0, borderRadius: "50%", background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "rgba(255,255,255,0.85)", cursor: "pointer", outline: "none" }}
+          >
+            <svg width={10} height={10} viewBox="0 0 10 10" fill="none">
+              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div style={{ flex: 1, minHeight: 0, padding: "8px 20px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* Caption + title */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: 11, lineHeight: leading.caption, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>
+              ({String(box.id).padStart(3, "0")}) {formatNeighbourhood(box.neighbourhood)}
+            </span>
+            <span style={{ fontSize: 18, lineHeight: leading.subtitle, letterSpacing: tracking.normal, textTransform: "uppercase", color: "#ffffff" }}>
+              {box.title}
+            </span>
+          </div>
+
+          {/* Description */}
+          {box.description && (
+            <p style={{ margin: 0, fontSize: 13, lineHeight: leading.body, letterSpacing: tracking.normal, color: "rgba(255,255,255,0.7)", textWrap: "pretty" } as React.CSSProperties}>
+              {box.description}
+            </p>
           )}
-        </AnimatePresence>,
-        document.body
-      )}
+
+          {/* Metadata */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <GridDetailRow label="Artist" value={box.artist} />
+            <GridDetailRow label="Year" value={formatYear(box.year)} />
+            <GridDetailRow label="Neighbourhood" value={formatNeighbourhood(box.neighbourhood)} />
+            <GridDetailRow
+              label="Location"
+              value={
+                <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "rgba(255,255,255,0.92)", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 3 }}>
+                  {formatAddress(box.address)}
+                  <span style={{ fontSize: 10, display: "inline-block", transform: "rotate(45deg) scaleX(-1)", lineHeight: 1 }}>↑</span>
+                </a>
+              }
+            />
+          </div>
+
+          {/* Photo strip */}
+          {photos.length > 1 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 12, marginTop: -22, borderTop: "1px solid rgba(255,255,255,0.12)" }}>
+              <span style={{ fontSize: 11, lineHeight: leading.meta, letterSpacing: tracking.loose, textTransform: "uppercase", color: "rgba(255,255,255,0.5)" }}>Photos</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {photos.map((src, i) => (
+                  <div
+                    key={src}
+                    onClick={() => setPhotoIndex(i)}
+                    style={{ width: 56, height: 56, flexShrink: 0, position: "relative", cursor: "pointer", outline: i === photoIndex ? "2px solid #ffffff" : "1px solid rgba(255,255,255,0.2)", outlineOffset: -1, opacity: i === photoIndex ? 1 : 0.65, transition: "opacity 0.15s ease" }}
+                  >
+                    <Image src={src} alt="" fill style={{ objectFit: "cover" }} sizes="56px" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
     </>
   );
 }
+

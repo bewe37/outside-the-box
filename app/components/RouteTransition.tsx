@@ -38,7 +38,10 @@ export function RouteTransition() {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 9999,
+        // Below the boot loader (z 100), above everything else. The initial
+        // dark-theme assertion fires a wipe during boot — keeping it under
+        // the loader hides that one, while normal navigations still show it.
+        zIndex: 99,
         pointerEvents: "none",
         background: wipe.color,
       }}
